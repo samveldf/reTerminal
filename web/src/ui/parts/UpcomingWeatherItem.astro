@@ -1,0 +1,17 @@
+---
+import WeatherIcon from './WeatherIcon.astro';
+
+interface Props {
+  date: string;
+  icon: string;
+  temp: string;
+}
+
+const { date, icon, temp } = Astro.props;
+---
+
+<div class="flex flex-col items-center">
+  <div>{date}</div>
+  <WeatherIcon size="small" icon={icon} />
+  <div>{`${temp}°C`}</div>
+</div>

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="480" viewBox="0 0 800 480" fill="none">
+  <rect width="800" height="480" fill="#05070A"/>
+  <path d="M0 380L180 240L320 320L470 190L640 300L800 180V480H0V380Z" fill="#0D1B2A"/>
+  <circle cx="120" cy="90" r="54" fill="#00F0FF"/>
+  <circle cx="120" cy="90" r="40" fill="#05070A"/>
+  <rect x="220" y="60" width="510" height="52" rx="10" fill="#0E1620" stroke="#39FF14" stroke-width="2"/>
+  <text x="240" y="95" fill="#39FF14" font-size="30" font-family="monospace" font-weight="700">FEATURE IMAGE SLOT</text>
+  <rect x="36" y="154" width="728" height="276" rx="14" fill="#0A1118" stroke="#FF2E63" stroke-width="2"/>
+  <text x="56" y="210" fill="#D6F8FF" font-size="28" font-family="monospace">Replace by FEATURE_IMAGE_URL</text>
+  <text x="56" y="258" fill="#8ACFD5" font-size="24" font-family="monospace">or overwrite /public/feature.svg</text>
+  <text x="56" y="306" fill="#00F0FF" font-size="24" font-family="monospace">Recommended: 800x480, high contrast</text>
+</svg>

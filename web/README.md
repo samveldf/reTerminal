@@ -1,0 +1,71 @@
+# Web-only Multi-page Cyber Dashboard (for SenseCraft)
+
+你现在这套是纯 `web` 方案，不用 `arduino/`。
+
+生成结果：
+- `page1.bmp`：天气 + 室内温湿度 + 电量
+- `page2.bmp`：Google Gadget 新闻摘要
+- `page3.bmp`：`./DSC_2962.jpg` 图片页
+
+## 1) `.env` 已配置
+
+`web/.env` 已写入：
+- OpenWeather API Key
+- 东京坐标
+- Tokyo 天气
+- Google Gadget RSS
+- `FEATURE_IMAGE_URL=/DSC_2962.jpg`
+- `INDOOR_TEMP_C / INDOOR_HUMIDITY / DEVICE_BATTERY_PERCENT`（当前为页面展示值）
+
+如果要改，编辑 `web/.env`。
+
+## 2) 本地开发
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+页面：
+- `http://localhost:3000/page1`
+- `http://localhost:3000/page2`
+- `http://localhost:3000/page3`
+- `http://localhost:3000/`（自动轮播）
+
+## 3) 生成 3 页截图和 BMP
+
+```bash
+cd web
+npm run build
+npx serve -s ./dist -l 3000 &
+npx wait-on http://localhost:3000
+npm run screenshot
+
+magick xc:"#000000" xc:"#FFFFFF" xc:"#FF0000" xc:"#FFFF00" xc:"#0000FF" xc:"#00FF00" xc:"#FF8000" +append palette.png
+for p in page1 page2 page3; do
+  magick ./dist/${p}.jpg \
+    -colorspace sRGB \
+    -white-threshold 85% \
+    -black-threshold 15% \
+    -level 15%,85%,0.5 \
+    -sharpen 0x3 \
+    -dither FloydSteinberg \
+    -remap palette.png \
+    -type truecolor \
+    ./dist/${p}.bmp
+done
+```
+
+## 4) 用 SenseCraft 实现多页循环
+
+推荐用 Gallery（最稳）：
+1. 在 SenseCraft 新建 `Gallery` 页面。
+2. 添加 3 张网络图片：
+   - `https://<your-user>.github.io/<your-repo>/page1.bmp`
+   - `https://<your-user>.github.io/<your-repo>/page2.bmp`
+   - `https://<your-user>.github.io/<your-repo>/page3.bmp`
+3. 设置轮播间隔（例如 20~60 秒）。
+4. Deploy 到 E1002。
+
+这样就是你要的“1页天气/设备信息、1页新闻摘要、1页图片”的循环显示。

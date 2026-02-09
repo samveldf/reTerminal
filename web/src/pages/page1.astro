@@ -1,0 +1,124 @@
+---
+import dayjs from 'dayjs';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { getWeather } from '../services/weatherService';
+
+const weather = await getWeather();
+const now = dayjs();
+---
+
+<BaseLayout>
+  <main class="epaper-screen page1-screen">
+    <header class="cyber-header">
+      <div class="header-title">PAGE 1 // TODAY + NEXT 3 DAYS</div>
+      <div class="header-time">{`TOKYO ${now.format('MM-DD HH:mm')}`}</div>
+    </header>
+
+    <section class="weather-grid">
+      {
+        weather.days.map((day) => (
+          <article class="panel day-card">
+            <div class="day-head">
+              <span>{day.label}</span>
+              <span>{day.date}</span>
+            </div>
+
+            <div class="icon-line">
+              <span class="icon-emoji">{day.icon}</span>
+              <span class="icon-symbol">{day.symbol}</span>
+            </div>
+
+            <div class="day-desc">{day.description}</div>
+            <div class="day-item">{`MAX ${day.maxTemp}°C`}</div>
+            <div class="day-item">{`MIN ${day.minTemp}°C`}</div>
+          </article>
+        ))
+      }
+    </section>
+
+    <div class="corner-note">1 / 3</div>
+  </main>
+</BaseLayout>
+
+<style>
+  .page1-screen {
+    gap: 6px;
+    padding: 8px;
+    position: relative;
+  }
+
+  .weather-grid {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .day-card {
+    border-color: var(--warn);
+    padding: 8px;
+    overflow: hidden;
+  }
+
+  .day-head {
+    display: flex;
+    justify-content: space-between;
+    color: var(--accent);
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+
+  .icon-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+
+  .icon-emoji {
+    color: var(--line);
+    font-size: 30px;
+    line-height: 30px;
+  }
+
+  .icon-symbol {
+    color: var(--line);
+    font-size: 28px;
+    font-weight: 800;
+    line-height: 30px;
+  }
+
+  .day-desc {
+    font-size: 16px;
+    line-height: 20px;
+    color: var(--text);
+    margin-bottom: 4px;
+    max-height: 40px;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  .day-item {
+    font-size: 14px;
+    line-height: 20px;
+    color: var(--muted);
+  }
+
+  .corner-note {
+    position: absolute;
+    right: 10px;
+    bottom: 8px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 700;
+    background: rgba(5, 7, 10, 0.6);
+    border: 1px solid var(--line);
+    padding: 1px 6px;
+    line-height: 16px;
+  }
+</style>

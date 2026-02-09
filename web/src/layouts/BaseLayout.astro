@@ -1,0 +1,25 @@
+---
+import '@fontsource-variable/noto-sans-jp';
+import '../styles/global.css';
+import '../styles/cyber-page.css';
+import '../libs/dayjs';
+
+if (import.meta.env.MODE === 'internal') {
+  const { startMSW } = await import('../libs/msw');
+  await startMSW();
+}
+---
+
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="generator" content={Astro.generator} />
+    <title>reTerminal E1002 Cyber Pages</title>
+  </head>
+
+  <body>
+    <slot />
+  </body>
+</html>

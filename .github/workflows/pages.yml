@@ -1,0 +1,107 @@
+name: Build and Deploy Dashboard
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: '*/30 * * * *'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    env:
+      TZ: Asia/Tokyo
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd web
+          npm ci
+
+      - name: Build site
+        run: |
+          cd web
+          npm run build
+          rm -f dist/mockServiceWorker.js
+        env:
+          NODE_ENV: production
+          OWM_API_KEY: ${{ secrets.OWM_API_KEY }}
+          OWM_LAT: ${{ vars.OWM_LAT }}
+          OWM_LON: ${{ vars.OWM_LON }}
+          WEATHER_CITY_LABEL: ${{ vars.WEATHER_CITY_LABEL }}
+          GOOGLE_NEWS_RSS_URL: ${{ vars.GOOGLE_NEWS_RSS_URL }}
+          FEATURE_IMAGE_URL: ${{ vars.FEATURE_IMAGE_URL }}
+          DASHBOARD_TZ: ${{ vars.DASHBOARD_TZ }}
+          INDOOR_TEMP_C: ${{ vars.INDOOR_TEMP_C }}
+          INDOOR_HUMIDITY: ${{ vars.INDOOR_HUMIDITY }}
+          DEVICE_BATTERY_PERCENT: ${{ vars.DEVICE_BATTERY_PERCENT }}
+          PAGE_ROTATE_SECONDS: ${{ vars.PAGE_ROTATE_SECONDS }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
+      - name: Cache Playwright
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('web/package-lock.json') }}
+
+      - name: Install Playwright
+        run: |
+          cd web
+          npx playwright install chromium
+
+      - name: Take Screenshots (3 pages)
+        run: |
+          cd web
+          npx serve -s ./dist -l 3000 &
+          npx wait-on http://localhost:3000
+          npm run screenshot
+
+      - name: Setup ImageMagick
+        uses: mfinelli/setup-imagemagick@v7
+
+      - name: Convert to EPD BMP (3 pages)
+        run: |
+          cd web
+          magick xc:"#000000" xc:"#FFFFFF" xc:"#FF0000" xc:"#FFFF00" xc:"#0000FF" xc:"#00FF00" xc:"#FF8000" +append palette.png
+
+          for p in page1 page2 page3; do
+            magick ./dist/${p}.jpg \
+              -colorspace sRGB \
+              -white-threshold 85% \
+              -black-threshold 15% \
+              -level 15%,85%,0.5 \
+              -sharpen 0x3 \
+              -dither FloydSteinberg \
+              -remap palette.png \
+              -type truecolor \
+              ./dist/${p}.bmp
+          done
+
+          cp ./dist/page1.bmp ./dist/screenshot.bmp
+
+      - name: Upload build output
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4

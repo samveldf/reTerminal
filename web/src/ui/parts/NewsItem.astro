@@ -1,0 +1,16 @@
+---
+import QrCode from './QrCode.astro';
+
+interface Props {
+  title: string;
+  url: string;
+  qrCodeSize?: number;
+}
+
+const { title, url, qrCodeSize } = Astro.props;
+---
+
+<div class="flex h-18 gap-2">
+  <div class="line-clamp-2 h-max w-full">{title}</div>
+  {url && <QrCode value={url} size={qrCodeSize} />}
+</div>

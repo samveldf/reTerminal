@@ -1,0 +1,14 @@
+---
+import { Icon } from 'astro-icon/components';
+
+interface Props {
+  icon?: string;
+  size: 'small' | 'medium' | 'large';
+}
+
+const { icon = 'wi:na', size } = Astro.props;
+
+const iconSize = size === 'small' ? 'text-4xl' : size === 'medium' ? 'text-6xl' : 'text-9xl';
+---
+
+<Icon name={icon} class=`${iconSize}` />

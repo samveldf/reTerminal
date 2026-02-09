@@ -1,0 +1,17 @@
+---
+import UpcomingWeatherItem from '../parts/UpcomingWeatherItem.astro';
+
+interface Props {
+  items: Array<{
+    date: string;
+    icon: string;
+    temp: string;
+  }>;
+}
+
+const { items } = Astro.props;
+---
+
+<div class="flex w-full justify-around">
+  {items.map((item) => <UpcomingWeatherItem date={item.date} icon={item.icon} temp={item.temp} />)}
+</div>

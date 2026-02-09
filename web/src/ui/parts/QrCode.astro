@@ -1,0 +1,23 @@
+---
+import QRCode from 'qrcode';
+
+interface Props {
+  value: string;
+  size?: number;
+}
+
+const { value, size = 32 } = Astro.props;
+
+const qrCodeDataUrl = await QRCode.toDataURL(value, {
+  width: size,
+  margin: 0,
+});
+---
+
+<img
+  src={qrCodeDataUrl}
+  alt="QR Code"
+  height={size}
+  width={size}
+  class="h-full w-auto object-cover"
+/>

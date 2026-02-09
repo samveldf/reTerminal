@@ -1,0 +1,14 @@
+---
+import WeatherAlert from '../parts/WeatherAlert.astro';
+import WeatherAlertItemList from './WeatherAlertItemList.astro';
+
+interface Props {
+  alerts: Array<string>;
+}
+
+const { alerts } = Astro.props;
+---
+
+<div class="flex flex-col justify-center">
+  <WeatherAlertItemList alerts={alerts} />
+</div>

@@ -1,0 +1,37 @@
+---
+interface Props {
+  value: string;
+}
+
+// c.f. https://www.jma.go.jp/jma/kishou/know/bosai/warning_kind.html
+const getAlertColor = (name: string): string => {
+  // ★ 特別警報（黒禁止 → 深紫）
+  if (/特別警報$/.test(name)) {
+    return 'bg-[#7A3E9D] text-white';
+  }
+
+  // ★ 青系警報（洪水・波浪・高潮）
+  if (/^(洪水|波浪|高潮)警報$/.test(name)) {
+    return 'bg-[#2F6DA3] text-white';
+  }
+
+  // ★ 警報（赤系）
+  if (/警報$/.test(name)) {
+    return 'bg-[#C03A2B] text-white';
+  }
+
+  // ★ 注意報（黄）
+  if (/注意報$/.test(name)) {
+    return 'bg-[#E5C14A] text-black';
+  }
+
+  // fallback
+  return 'bg-[#DDDDDD] text-black';
+};
+
+const { value } = Astro.props;
+
+const alertColor = getAlertColor(value);
+---
+
+<div class={`${alertColor} w-35 pt-1 pb-1 rounded-md flex justify-center`}>{value}</div>

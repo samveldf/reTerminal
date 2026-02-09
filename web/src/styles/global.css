@@ -1,0 +1,16 @@
+@import 'tailwindcss';
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 800px;
+  height: 480px;
+  overflow: hidden;
+  font-family: 'Noto Sans JP Variable', 'Noto Sans SC', sans-serif;
+  background: #05070a;
+}

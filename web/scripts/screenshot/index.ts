@@ -9,9 +9,9 @@ const HEIGHT = Number(process.env.HEIGHT || 480);
 const OUTPUT_DIR = process.env.OUTPUT_DIR || 'dist';
 
 const targets = [
-  { route: '/page1', file: 'page1.jpg' },
-  { route: '/page2', file: 'page2.jpg' },
-  { route: '/page3', file: 'page3.jpg' },
+  { route: '/page1/', file: 'page1.jpg' },
+  { route: '/page2/', file: 'page2.jpg' },
+  { route: '/page3/', file: 'page3.jpg' },
 ];
 
 async function captureAllScreenshots() {

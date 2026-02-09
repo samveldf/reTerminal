@@ -38,8 +38,8 @@ npm run dev
 ```bash
 cd web
 npm run build
-npx serve -s ./dist -l 3000 &
-npx wait-on http://localhost:3000
+python3 -m http.server 3000 --directory ./dist &
+npx wait-on http://127.0.0.1:3000
 npm run screenshot
 
 magick xc:"#000000" xc:"#FFFFFF" xc:"#FF0000" xc:"#FFFF00" xc:"#0000FF" xc:"#00FF00" xc:"#FF8000" +append palette.png

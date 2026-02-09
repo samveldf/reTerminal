@@ -67,8 +67,11 @@ jobs:
       - name: Take Screenshots (3 pages)
         run: |
           cd web
-          npx serve -s ./dist -l 3000 &
-          npx wait-on http://localhost:3000
+          python3 -m http.server 3000 --directory ./dist >/tmp/reterminal-http.log 2>&1 &
+          for i in {1..30}; do
+            curl -fsS http://127.0.0.1:3000/ >/dev/null && break
+            sleep 1
+          done
           npm run screenshot
 
       - name: Setup ImageMagick

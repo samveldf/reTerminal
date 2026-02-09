@@ -11,6 +11,6 @@ body {
   width: 800px;
   height: 480px;
   overflow: hidden;
-  font-family: 'Noto Sans JP Variable', 'Noto Sans SC', sans-serif;
+  font-family: 'Noto Sans SC', 'Noto Sans JP Variable', sans-serif;
   background: #05070a;
 }

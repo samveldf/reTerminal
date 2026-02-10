@@ -33,8 +33,8 @@ export interface GadgetBriefData {
 }
 
 const GOOGLE_NEWS_HOST = 'news.google.com';
-const GADGET_BRIEF_MIN = 180;
-const GADGET_BRIEF_MAX = 220;
+const GADGET_BRIEF_MIN = 160;
+const GADGET_BRIEF_MAX = 195;
 const decoder = new GoogleDecoder();
 
 const stripBrokenChars = (input: string): string => {
@@ -111,9 +111,20 @@ const normalizeArticleText = (raw: string): string => {
 
 const normalizeSummaryText = (input: string): string => {
   return stripBrokenChars(input)
+    .replace(/https?:\/\/\S+/gi, '')
+    .replace(/www\.\S+/gi, '')
+    .replace(/mailto:\S+/gi, '')
+    .replace(/\([^)]{0,120}(?:https?:\/\/|www\.|mailto:)[^)]*\)/gi, '')
+    .replace(/\[[^\]]{1,24}\]/g, '')
+    .replace(/[=_]{2,}/g, '')
+    .replace(/\s*\([^)]*https?:\/\/[^)]*\)/gi, '')
+    .replace(/[|｜]/g, '，')
     .replace(/[#*_`>]/g, '')
     .replace(/[ \t]+/g, '')
     .replace(/\n+/g, '')
+    .replace(/[，,]{2,}/g, '，')
+    .replace(/[。．]{2,}/g, '。')
+    .replace(/^[，,;；:：\-\s]+/, '')
     .replace(/^[：:;；，,。.!！？]+/, '')
     .trim();
 };

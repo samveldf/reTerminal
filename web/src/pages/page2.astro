@@ -30,7 +30,6 @@ const now = dayjs();
           ))
         }
       </div>
-      <div class="meta-tag">3 BRIEFS / ~200 CHARS EACH</div>
     </section>
 
     <div class="corner-note">2 / 3</div>
@@ -40,19 +39,29 @@ const now = dayjs();
     const fitBriefSummaries = () => {
       const summaries = document.querySelectorAll('[data-brief-summary]');
       summaries.forEach((summary) => {
-        let size = 14;
-        const min = 10;
+        const min = 13;
+        const max = 30;
+        let low = min;
+        let high = max;
+        let best = min;
 
-        const apply = () => {
+        const apply = (size) => {
           summary.style.fontSize = `${size}px`;
-          summary.style.lineHeight = `${Math.round(size * 1.25)}px`;
+          summary.style.lineHeight = `${Math.round(size * 1.16)}px`;
         };
 
-        apply();
-        while (size > min && summary.scrollHeight > summary.clientHeight) {
-          size -= 1;
-          apply();
+        while (low <= high) {
+          const mid = Math.floor((low + high) / 2);
+          apply(mid);
+          if (summary.scrollHeight <= summary.clientHeight) {
+            best = mid;
+            low = mid + 1;
+          } else {
+            high = mid - 1;
+          }
         }
+
+        apply(best);
       });
     };
 
@@ -66,19 +75,35 @@ const now = dayjs();
 
 <style>
   .page2-screen {
-    padding: 6px;
+    padding: 5px;
     position: relative;
-    gap: 6px;
+    gap: 5px;
+  }
+
+  .page2-screen .cyber-header {
+    height: 44px;
+    padding: 4px 9px;
+  }
+
+  .page2-screen .header-title {
+    font-size: 22px;
+    line-height: 24px;
+    letter-spacing: 0.5px;
+  }
+
+  .page2-screen .header-time {
+    font-size: 16px;
+    line-height: 18px;
   }
 
   .briefs-panel {
     flex: 1;
     min-height: 0;
     border-color: var(--warn);
-    padding: 6px;
+    padding: 4px;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 2px;
   }
 
   .brief-list {
@@ -86,12 +111,12 @@ const now = dayjs();
     min-height: 0;
     display: grid;
     grid-template-rows: repeat(3, 1fr);
-    gap: 4px;
+    gap: 1px;
   }
 
   .brief-card {
     border: 1px solid var(--line);
-    padding: 4px 6px;
+    padding: 3px 5px;
     background: #ffffff;
     overflow: hidden;
     display: flex;
@@ -104,23 +129,23 @@ const now = dayjs();
   }
 
   .brief-meta {
-    height: 14px;
+    height: 13px;
     display: grid;
     grid-template-columns: 24px 1fr auto;
     align-items: center;
-    column-gap: 6px;
-    line-height: 14px;
+    column-gap: 4px;
+    line-height: 13px;
   }
 
   .brief-index {
     color: var(--accent);
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 800;
   }
 
   .brief-source {
     color: var(--accent);
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 700;
     white-space: nowrap;
     overflow: hidden;
@@ -129,39 +154,36 @@ const now = dayjs();
 
   .brief-time {
     color: var(--muted);
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 700;
   }
 
   .brief-title {
     margin: 0;
-    font-size: 16px;
-    line-height: 18px;
+    font-size: 20px;
+    line-height: 21px;
     color: var(--line);
     font-weight: 800;
-    white-space: nowrap;
+    white-space: normal;
     overflow: hidden;
-    text-overflow: ellipsis;
+    text-overflow: clip;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
   }
 
   .brief-summary {
     margin: 0;
-    font-size: 14px;
-    line-height: 18px;
+    font-size: 18px;
+    line-height: 21px;
     color: var(--text);
-    font-weight: 600;
+    font-weight: 700;
+    flex: 1;
+    min-height: 0;
     overflow: hidden;
     word-break: break-word;
     white-space: normal;
-  }
-
-  .meta-tag {
-    height: 16px;
-    color: var(--muted);
-    font-size: 11px;
-    line-height: 16px;
-    font-weight: 700;
-    text-align: right;
+    text-rendering: geometricPrecision;
   }
 
   .corner-note {

@@ -36,6 +36,8 @@ const GOOGLE_NEWS_HOST = 'news.google.com';
 const GADGET_BRIEF_MIN = 160;
 const GADGET_BRIEF_MAX = 195;
 const decoder = new GoogleDecoder();
+const MEDIA_PREFIX_PATTERN =
+  '(?:新浪(?:科技|数码)?|网易(?:科技|新闻)?|腾讯(?:科技|新闻)?|凤凰(?:网科技|新闻)?|搜狐(?:科技|新闻)?|快科技|IT之家|观察者网|澎湃新闻|封面新闻|第一财经|财联社|新华社|人民日报|中新经纬|界面新闻|C114通信网|爱范儿|36氪)';
 
 const stripBrokenChars = (input: string): string => {
   return input
@@ -136,9 +138,77 @@ const stripSourceNoise = (summary: string, source: string): string => {
     .replace(new RegExp(`^${sourcePattern}[，,。:：;；\\-—|｜\\s]*`, 'i'), '');
 };
 
+const stripEditorialNoise = (summary: string): string => {
+  let text = summary.trim();
+
+  const leadPatterns = [
+    /^(?:作者|编辑|责编|记者|撰文|编译|审校|校对)\s*[：:，,\- ]*\s*[\u4e00-\u9fffA-Za-z0-9·]{1,18}\s*/i,
+    /^(?:来源|出处|转自|本文来源|稿源)\s*[：:，,\- ]*\s*[A-Za-z0-9\u4e00-\u9fff·]{1,30}\s*/i,
+    new RegExp(
+      `^(?:(?:${MEDIA_PREFIX_PATTERN})(?:科技|数码|新闻|财经|网)?[，,:：\\-\\s]*){1,4}(?:讯|消息|报道)?[，,:：\\-\\s]*`,
+      'i',
+    ),
+    /^(?:20\d{2}[年./-]\d{1,2}[月./-]\d{1,2}(?:日)?|\d{1,2}月\d{1,2}日)(?:上午|下午|晚间|凌晨|中午)?(?:消息|报道|电)?[，,:：\-\s]*/i,
+    /^(?:作者|编辑|责编|记者|来源|出处)[，,:：\-\s]*/i,
+  ];
+
+  for (let i = 0; i < 8; i += 1) {
+    const before = text;
+    for (const pattern of leadPatterns) {
+      text = text.replace(pattern, '');
+    }
+    text = text
+      .replace(
+        new RegExp(
+          `(?:据)?${MEDIA_PREFIX_PATTERN}(?:科技|数码|新闻|财经|网)?[，,、\\s]*(?:消息|报道|讯|称|指出)?`,
+          'gi',
+        ),
+        '',
+      )
+      .replace(
+        new RegExp(
+          `(?:${MEDIA_PREFIX_PATTERN}(?:科技|数码|新闻|财经|网)?\\s*)?\\d{1,2}月\\d{1,2}日(?:\\d{1,2}:\\d{2})?(?:上午|下午|晚间|凌晨|中午)?(?:消息|报道|讯)?`,
+          'gi',
+        ),
+        '',
+      )
+      .replace(/(?:作者|编辑|责编|记者)\s*[：:，,\- ]*\s*[\u4e00-\u9fffA-Za-z0-9·]{1,18}/g, '')
+      .replace(/(?:图源|图片来源|资料图|原标题|本文转自)\s*[：:，,\- ]*[^，。；;]{1,40}/g, '')
+      .replace(/^[，,。;；:：\-\s]+/, '')
+      .trim();
+    if (text === before) break;
+  }
+
+  return text;
+};
+
+const dedupeRepeatedSentences = (summary: string): string => {
+  const sentences = sentenceSplit(summary);
+  if (sentences.length <= 1) return summary;
+
+  const kept: string[] = [];
+  const normalizedSeen: string[] = [];
+  for (const sentence of sentences) {
+    const norm = normalizeLooseComparable(sentence).replace(/\d+/g, '');
+    if (!norm) continue;
+    const duplicated = normalizedSeen.some(
+      (seen) => seen === norm || seen.includes(norm) || norm.includes(seen),
+    );
+    if (!duplicated) {
+      kept.push(sentence);
+      normalizedSeen.push(norm);
+    }
+  }
+
+  const merged = kept.join('');
+  return merged || summary;
+};
+
 const cleanupBriefNoise = (summary: string, title: string, source: string): string => {
   return stripTitleEchoSentence(
-    stripLeadingTitleNoise(stripSourceNoise(stripTimestampNoise(summary), source), title),
+    dedupeRepeatedSentences(
+      stripLeadingTitleNoise(stripEditorialNoise(stripSourceNoise(stripTimestampNoise(summary), source)), title),
+    ),
     title,
   )
     .replace(/([\u4e00-\u9fffA-Za-z0-9]{3,16})\1{1,}/g, '$1')
@@ -272,6 +342,21 @@ const sentenceSplit = (text: string): string[] => {
     .filter((sentence) => sentence.length > 2);
 };
 
+const isEditorialSentence = (sentence: string): boolean => {
+  const text = sentence.trim();
+  if (!text) return true;
+  if (/^(?:作者|编辑|责编|记者|来源|出处|图源|图片来源|原标题)/.test(text)) return true;
+  if (
+    new RegExp(
+      `^(?:据)?${MEDIA_PREFIX_PATTERN}(?:科技|数码|新闻|财经|网)?[，,、\\s]*(?:消息|报道|讯|称|指出)?`,
+      'i',
+    ).test(text)
+  ) {
+    return true;
+  }
+  return false;
+};
+
 const enforceTextLength = (
   text: string,
   sourceText: string,
@@ -296,9 +381,24 @@ const enforceTextLength = (
   }
 
   if (countChars(current) < minChars) {
-    const missing = minChars - countChars(current);
-    const appendPart = cutChars(compactSource, missing + 24);
-    current = normalizeSummaryText(`${current}${appendPart}`);
+    const sourceSentences = sentenceSplit(compactSource);
+    for (const sentence of sourceSentences) {
+      if (countChars(current) >= minChars) break;
+      if (isEditorialSentence(sentence)) continue;
+
+      const currentNorm = normalizeLooseComparable(current).replace(/\d+/g, '');
+      const sentenceNorm = normalizeLooseComparable(sentence).replace(/\d+/g, '');
+      if (!sentenceNorm || sentenceNorm.length < 8) continue;
+      if (currentNorm.includes(sentenceNorm) || sentenceNorm.includes(currentNorm.slice(-24))) continue;
+
+      current = normalizeSummaryText(`${current}${sentence}`);
+    }
+
+    if (countChars(current) < minChars) {
+      const missing = minChars - countChars(current);
+      const appendPart = cutChars(compactSource, missing + 24);
+      current = normalizeSummaryText(`${current}${appendPart}`);
+    }
   }
 
   if (countChars(current) > maxChars) {

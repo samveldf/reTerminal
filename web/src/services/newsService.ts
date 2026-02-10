@@ -348,6 +348,165 @@ const dedupeByTitle = (items: NewsItem[]): NewsItem[] => {
   });
 };
 
+const normalizeComparable = (input: string): string => {
+  return input.toLowerCase().replace(/[\s\-_.,，。:：;；!！?？'"“”‘’`~()[\]{}<>|/\\]/g, '');
+};
+
+const buildSimilarityTokensFromText = (text: string): Set<string> => {
+  const tokens = new Set<string>();
+  const base = normalizeComparable(text);
+
+  for (const word of base.match(/[a-z0-9]{3,}/g) || []) {
+    tokens.add(word);
+  }
+
+  const cjk = (base.match(/[\u4e00-\u9fff]/g) || []).join('');
+  for (let i = 0; i <= cjk.length - 3; i += 1) {
+    tokens.add(cjk.slice(i, i + 3));
+  }
+
+  return tokens;
+};
+
+const DEVICE_PATTERNS = [
+  /(?:iphone|ipad|macbook|galaxy|pixel|xperia|xiaomi|redmi|huawei|honor|oppo|vivo|iqoo|oneplus|realme|meizu|lenovo|thinkpad|surface)[\s-]*[a-z0-9]+(?:[\s-]*(?:ultra|pro|max|plus|mini|fold|flip|se))*/gi,
+  /(?:小米|红米|华为|荣耀|魅族|一加|真我|联想|苹果|三星|OPPO|vivo|iQOO|realme)[A-Za-z0-9]{1,12}(?:Ultra|Pro|Max|Plus|Mini|Fold|Flip|SE)?/gi,
+  /\biqoo[\s-]*15[\s-]*ultra\b/gi,
+];
+
+const extractDeviceKeysFromText = (text: string): Set<string> => {
+  const keys = new Set<string>();
+  const compact = text.replace(/\s+/g, '');
+
+  for (const pattern of DEVICE_PATTERNS) {
+    for (const hit of text.match(pattern) || []) {
+      keys.add(normalizeComparable(hit));
+    }
+    for (const hit of compact.match(pattern) || []) {
+      keys.add(normalizeComparable(hit));
+    }
+  }
+
+  return keys;
+};
+
+const buildSimilarityTokens = (item: NewsItem): Set<string> => {
+  return buildSimilarityTokensFromText(`${item.title} ${item.description}`);
+};
+
+const extractDeviceKeys = (item: NewsItem): Set<string> => {
+  return extractDeviceKeysFromText(`${item.title} ${item.description}`);
+};
+
+const jaccard = (a: Set<string>, b: Set<string>): number => {
+  if (!a.size || !b.size) return 0;
+  let inter = 0;
+  for (const token of a) {
+    if (b.has(token)) inter += 1;
+  }
+  const union = a.size + b.size - inter;
+  return union > 0 ? inter / union : 0;
+};
+
+const isHighlySimilar = (
+  candidate: NewsItem,
+  selected: NewsItem,
+  candidateTokens: Set<string>,
+  selectedTokens: Set<string>,
+  candidateDeviceKeys: Set<string>,
+  selectedDeviceKeys: Set<string>,
+): boolean => {
+  for (const key of candidateDeviceKeys) {
+    if (selectedDeviceKeys.has(key)) return true;
+  }
+
+  const candTitle = normalizeComparable(candidate.title);
+  const selectedTitle = normalizeComparable(selected.title);
+  if (
+    candTitle.length >= 12 &&
+    selectedTitle.length >= 12 &&
+    (candTitle.includes(selectedTitle) || selectedTitle.includes(candTitle))
+  ) {
+    return true;
+  }
+
+  return jaccard(candidateTokens, selectedTokens) >= 0.5;
+};
+
+const selectDiverseGadgetItems = (rankedItems: NewsItem[], count: number): NewsItem[] => {
+  const selected: NewsItem[] = [];
+  const tokenMap = new Map<NewsItem, Set<string>>();
+  const deviceMap = new Map<NewsItem, Set<string>>();
+
+  for (const item of rankedItems) {
+    tokenMap.set(item, buildSimilarityTokens(item));
+    deviceMap.set(item, extractDeviceKeys(item));
+  }
+
+  for (const candidate of rankedItems) {
+    if (selected.length >= count) break;
+
+    const candidateTokens = tokenMap.get(candidate) || new Set<string>();
+    const candidateDeviceKeys = deviceMap.get(candidate) || new Set<string>();
+    const hasNearDuplicate = selected.some((picked) =>
+      isHighlySimilar(
+        candidate,
+        picked,
+        candidateTokens,
+        tokenMap.get(picked) || new Set<string>(),
+        candidateDeviceKeys,
+        deviceMap.get(picked) || new Set<string>(),
+      ),
+    );
+
+    if (!hasNearDuplicate) {
+      selected.push(candidate);
+    }
+  }
+
+  if (selected.length < count) {
+    for (const item of rankedItems) {
+      if (selected.length >= count) break;
+      if (!selected.includes(item)) selected.push(item);
+    }
+  }
+
+  return selected.slice(0, count);
+};
+
+const isBriefHighlySimilar = (candidate: GadgetBrief, selected: GadgetBrief): boolean => {
+  const candidateText = `${candidate.title} ${candidate.summary}`;
+  const selectedText = `${selected.title} ${selected.summary}`;
+
+  const candidateDeviceKeys = extractDeviceKeysFromText(candidateText);
+  const selectedDeviceKeys = extractDeviceKeysFromText(selectedText);
+  for (const key of candidateDeviceKeys) {
+    if (selectedDeviceKeys.has(key)) return true;
+  }
+
+  const candidateTitle = normalizeComparable(candidate.title);
+  const selectedTitle = normalizeComparable(selected.title);
+  if (
+    candidateTitle.length >= 12 &&
+    selectedTitle.length >= 12 &&
+    (candidateTitle.includes(selectedTitle) || selectedTitle.includes(candidateTitle))
+  ) {
+    return true;
+  }
+
+  const titleSimilarity = jaccard(
+    buildSimilarityTokensFromText(candidate.title),
+    buildSimilarityTokensFromText(selected.title),
+  );
+  if (titleSimilarity >= 0.32) return true;
+
+  const bodySimilarity = jaccard(
+    buildSimilarityTokensFromText(candidateText),
+    buildSimilarityTokensFromText(selectedText),
+  );
+  return bodySimilarity >= 0.34;
+};
+
 const parseNewsItems = async (feedUrl: string, fallback: NewsItem[]): Promise<NewsItem[]> => {
   let response = '';
   try {
@@ -633,13 +792,54 @@ export const getGoogleHeadlines = async (): Promise<NewsData> => {
 export const getGadgetBriefs = async (): Promise<GadgetBriefData> => {
   const items = await parseNewsItems(resolveGadgetRssUrl(), fallbackGadgetItems());
   const ranked = [...items].sort((a, b) => scoreGadgetHeadline(b) - scoreGadgetHeadline(a));
-  const selected = ranked.slice(0, 3);
 
-  if (!selected.length) {
+  if (!ranked.length) {
     return { briefs: [toFallbackBrief(0), toFallbackBrief(1), toFallbackBrief(2)] };
   }
 
-  const briefs = await Promise.all(selected.map((item) => buildGadgetBrief(item, ranked)));
+  const candidatePool = ranked.slice(0, 10);
+  const cache = new Map<string, GadgetBrief>();
+  const getCacheKey = (item: NewsItem) => `${item.title}|${item.url}`;
+  const getOrBuildBrief = async (item: NewsItem): Promise<GadgetBrief> => {
+    const key = getCacheKey(item);
+    const cached = cache.get(key);
+    if (cached) return cached;
+    const built = await buildGadgetBrief(item, ranked);
+    cache.set(key, built);
+    return built;
+  };
+
+  const briefs: GadgetBrief[] = [];
+  const preSelected = selectDiverseGadgetItems(candidatePool, Math.min(8, candidatePool.length));
+  for (const item of preSelected) {
+    const brief = await getOrBuildBrief(item);
+    const duplicated = briefs.some((picked) => isBriefHighlySimilar(brief, picked));
+    if (!duplicated) {
+      briefs.push(brief);
+    }
+    if (briefs.length >= 3) break;
+  }
+
+  if (briefs.length < 3) {
+    for (const item of candidatePool) {
+      if (briefs.length >= 3) break;
+      const brief = await getOrBuildBrief(item);
+      if (!briefs.some((picked) => isBriefHighlySimilar(brief, picked))) {
+        briefs.push(brief);
+      }
+    }
+  }
+
+  if (briefs.length < 3) {
+    for (const item of candidatePool) {
+      if (briefs.length >= 3) break;
+      const brief = await getOrBuildBrief(item);
+      if (!briefs.some((picked) => picked.title === brief.title && picked.source === brief.source)) {
+        briefs.push(brief);
+      }
+    }
+  }
+
   while (briefs.length < 3) {
     briefs.push(toFallbackBrief(briefs.length));
   }

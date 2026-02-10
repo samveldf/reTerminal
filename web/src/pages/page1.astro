@@ -21,8 +21,8 @@ const now = dayjs();
         <div class="section-head">TODAY + NEXT 3 DAYS</div>
         <div class="weather-grid">
           {
-            weather.days.map((day) => (
-              <article class="day-card">
+            weather.days.map((day, idx) => (
+              <article class={`day-card ${idx === 0 ? 'day-card-hero' : 'day-card-compact'}`}>
                 <div class="day-head">
                   <span>{day.label}</span>
                   <span>{day.date}</span>
@@ -32,7 +32,7 @@ const now = dayjs();
                   <span class="icon-symbol">{day.symbol}</span>
                 </div>
                 <div class="day-desc">{day.description}</div>
-                <div class="day-item">{`MAX ${day.maxTemp}°C  MIN ${day.minTemp}°C`}</div>
+                <div class="day-item">{`MAX ${day.maxTemp}°C  MIN ${day.minTemp}°C  HUM ${day.humidity}%`}</div>
               </article>
             ))
           }
@@ -103,30 +103,32 @@ const now = dayjs();
     flex: 1;
     min-height: 0;
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows: 1fr 1fr;
-    gap: 6px;
+    grid-template-columns: 1.18fr 1fr;
+    grid-template-rows: repeat(3, 1fr);
+    gap: 5px;
     overflow: hidden;
   }
 
   .day-card {
-    border: 1px solid var(--warn);
+    border: 1px solid var(--line);
     padding: 5px 6px;
     overflow: hidden;
-    background: #ffffff;
+    background:
+      linear-gradient(180deg, rgba(0, 0, 255, 0.03), rgba(255, 255, 255, 0) 45%),
+      #ffffff;
     display: flex;
     flex-direction: column;
-    gap: 1px;
+    gap: 2px;
   }
 
   .day-head {
     display: flex;
     justify-content: space-between;
     color: var(--accent);
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 700;
     margin-bottom: 1px;
-    line-height: 14px;
+    line-height: 15px;
   }
 
   .icon-line {
@@ -139,33 +141,101 @@ const now = dayjs();
 
   .icon-emoji {
     color: var(--line);
-    font-size: 16px;
-    line-height: 16px;
+    font-size: 18px;
+    line-height: 18px;
   }
 
   .icon-symbol {
     color: var(--line);
-    font-size: 17px;
+    font-size: 20px;
     font-weight: 800;
-    line-height: 18px;
+    line-height: 20px;
   }
 
   .day-desc {
-    font-size: 11px;
-    line-height: 12px;
+    font-size: 13px;
+    line-height: 14px;
     color: var(--text);
-    margin-bottom: 1px;
+    margin-bottom: 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    min-height: 12px;
+    min-height: 14px;
   }
 
   .day-item {
-    font-size: 10px;
-    line-height: 12px;
+    font-size: 12px;
+    line-height: 14px;
     color: var(--muted);
     font-weight: 700;
+  }
+
+  .day-card-hero {
+    grid-column: 1;
+    grid-row: 1 / span 3;
+    border-width: 2px;
+    border-color: var(--line);
+    padding: 8px 9px;
+    gap: 3px;
+  }
+
+  .day-card-hero .day-head {
+    font-size: 17px;
+    line-height: 19px;
+    margin-bottom: 2px;
+  }
+
+  .day-card-hero .icon-line {
+    gap: 7px;
+    margin-bottom: 2px;
+    line-height: 28px;
+  }
+
+  .day-card-hero .icon-emoji {
+    font-size: 28px;
+    line-height: 28px;
+  }
+
+  .day-card-hero .icon-symbol {
+    font-size: 33px;
+    line-height: 33px;
+  }
+
+  .day-card-hero .day-desc {
+    font-size: 20px;
+    line-height: 22px;
+    min-height: 22px;
+  }
+
+  .day-card-hero .day-item {
+    font-size: 14px;
+    line-height: 17px;
+  }
+
+  .day-card-compact .icon-symbol {
+    font-size: 17px;
+    line-height: 18px;
+  }
+
+  .day-card-compact .icon-emoji {
+    font-size: 15px;
+    line-height: 15px;
+  }
+
+  .day-card-compact .day-head {
+    font-size: 12px;
+    line-height: 14px;
+  }
+
+  .day-card-compact .day-desc {
+    font-size: 11px;
+    line-height: 12px;
+    min-height: 12px;
+  }
+
+  .day-card-compact .day-item {
+    font-size: 9px;
+    line-height: 10px;
   }
 
   .headline-list {

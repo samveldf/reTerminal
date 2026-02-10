@@ -38,6 +38,8 @@ const GADGET_BRIEF_MAX = 195;
 const decoder = new GoogleDecoder();
 const MEDIA_PREFIX_PATTERN =
   '(?:新浪(?:科技|数码)?|网易(?:科技|新闻)?|腾讯(?:科技|新闻)?|凤凰(?:网科技|新闻)?|搜狐(?:科技|新闻)?|快科技|IT之家|观察者网|澎湃新闻|封面新闻|第一财经|财联社|新华社|人民日报|中新经纬|界面新闻|C114通信网|爱范儿|36氪)';
+const CHINESE_SURNAME_CHARS =
+  '赵钱孙李周吴郑王冯陈褚卫蒋沈韩杨朱秦尤许何吕施张孔曹严华金魏陶姜戚谢邹喻柏水窦章云苏潘葛范彭郎鲁韦昌马苗凤花方俞任袁柳鲍史唐费廉岑薛雷贺倪汤滕殷罗毕郝安常乐于时傅皮卞齐康伍余元卜顾孟平黄和穆萧尹姚邵湛汪祁毛禹狄米贝明臧计伏成戴谈宋茅庞熊纪舒屈项祝董梁杜阮蓝闵席季麻强贾路娄危江童颜郭梅盛林刁钟徐邱骆高夏蔡田樊胡凌霍虞万支柯昝管卢莫经房裘缪干解应宗丁宣贲邓郁单杭洪包诸左石崔吉钮龚程嵇邢滑裴陆荣翁荀羊於惠甄曲家封芮羿储靳汲邴糜松井段富巫乌焦巴弓牧隗山谷车侯宓蓬全郗班仰秋仲伊宫宁仇栾暴甘斜厉戎祖武符刘景詹束龙叶幸司韶郜黎蓟薄印宿白怀蒲邰从鄂索咸籍赖卓蔺屠蒙池乔阴胥能苍双闻莘党翟谭贡劳逄姬申扶堵冉宰郦雍却璩桑桂濮牛寿通边扈燕冀郏浦尚农温别庄晏柴瞿阎充慕连茹习宦艾鱼容向古易慎戈廖庾终暨居衡步都耿满弘匡国文寇广禄阙东欧殳沃利蔚越夔隆师巩厍聂晁勾敖融冷訾辛阚那简饶空曾毋沙乜养鞠须丰巢关蒯相查后荆红游竺权逯盖益桓公';
 
 const stripBrokenChars = (input: string): string => {
   return input
@@ -141,6 +143,10 @@ const stripSourceNoise = (summary: string, source: string): string => {
 const stripEditorialNoise = (summary: string): string => {
   let text = summary.trim();
 
+  const bylineNamePrefix = new RegExp(
+    `^(?:[${CHINESE_SURNAME_CHARS}][\\u4e00-\\u9fff]{1,2}(?:[·・][\\u4e00-\\u9fff]{1,3})?[，,、|｜\\s]*){1,3}(?=(?:近年|近年来|近日|表示|称|指出|认为|在|就|对|从|随着|目前|今年|最新))`,
+    'i',
+  );
   const leadPatterns = [
     /^(?:作者|编辑|责编|记者|撰文|编译|审校|校对)\s*[：:，,\- ]*\s*[\u4e00-\u9fffA-Za-z0-9·]{1,18}\s*/i,
     /^(?:来源|出处|转自|本文来源|稿源)\s*[：:，,\- ]*\s*[A-Za-z0-9\u4e00-\u9fff·]{1,30}\s*/i,
@@ -158,6 +164,7 @@ const stripEditorialNoise = (summary: string): string => {
       text = text.replace(pattern, '');
     }
     text = text
+      .replace(bylineNamePrefix, '')
       .replace(
         new RegExp(
           `(?:据)?${MEDIA_PREFIX_PATTERN}(?:科技|数码|新闻|财经|网)?[，,、\\s]*(?:消息|报道|讯|称|指出)?`,
@@ -204,8 +211,36 @@ const dedupeRepeatedSentences = (summary: string): string => {
   return merged || summary;
 };
 
+const finalizeSummaryEnding = (summary: string): string => {
+  let text = summary.trim().replace(/[，,、;；:：\-\s]+$/, '');
+  if (!text) return '';
+  if (/[。！？!?；;]$/.test(text)) return text;
+
+  const lastTerminal = Math.max(
+    text.lastIndexOf('。'),
+    text.lastIndexOf('！'),
+    text.lastIndexOf('？'),
+    text.lastIndexOf('!'),
+    text.lastIndexOf('?'),
+    text.lastIndexOf('；'),
+    text.lastIndexOf(';'),
+  );
+  if (lastTerminal >= Math.floor(text.length * 0.55)) {
+    return text.slice(0, lastTerminal + 1).trim();
+  }
+
+  const lastComma = Math.max(text.lastIndexOf('，'), text.lastIndexOf(','), text.lastIndexOf('、'));
+  if (lastComma >= Math.floor(text.length * 0.7)) {
+    text = text.slice(0, lastComma).trim();
+  }
+
+  text = text.replace(/(?:以及|并且|而且|但是|因此|所以|其中|同时|并|且|和|与|及|的|了|在|对|将|就|从)$/u, '').trim();
+  if (!text) return '';
+  return /[。！？!?；;]$/.test(text) ? text : `${text}。`;
+};
+
 const cleanupBriefNoise = (summary: string, title: string, source: string): string => {
-  return stripTitleEchoSentence(
+  const cleaned = stripTitleEchoSentence(
     dedupeRepeatedSentences(
       stripLeadingTitleNoise(stripEditorialNoise(stripSourceNoise(stripTimestampNoise(summary), source)), title),
     ),
@@ -217,6 +252,8 @@ const cleanupBriefNoise = (summary: string, title: string, source: string): stri
     .replace(/[。．]{2,}/g, '。')
     .replace(/^[，,。;；:：\-\s]+/, '')
     .trim();
+
+  return finalizeSummaryEnding(cleaned);
 };
 
 const isLikelyCorruptedText = (input: string): boolean => {

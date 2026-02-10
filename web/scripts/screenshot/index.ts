@@ -29,7 +29,15 @@ async function captureAllScreenshots() {
 
       console.log(`capture: ${url} -> ${outputPath}`);
       await page.goto(url, { waitUntil: 'networkidle', timeout: 45_000 });
-      await page.waitForTimeout(1200);
+      await page.waitForFunction(() => !document.fonts || document.fonts.status === 'loaded', {
+        timeout: 20_000,
+      });
+      await page.evaluate(async () => {
+        if (document.fonts?.ready) {
+          await document.fonts.ready;
+        }
+      });
+      await page.waitForTimeout(500);
       await page.screenshot({
         path: outputPath,
         type: 'png',

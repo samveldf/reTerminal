@@ -30,8 +30,31 @@ const SUMMARY_MIN = 200;
 const SUMMARY_MAX = 300;
 const decoder = new GoogleDecoder();
 
+const stripBrokenChars = (input: string): string => {
+  return input
+    .replace(/[�□]/g, '')
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '');
+};
+
+const isLikelyCorruptedText = (input: string): boolean => {
+  const text = input.trim();
+  if (!text) return true;
+
+  const brokenCount = (text.match(/[�□]/g) || []).length;
+  if (brokenCount >= 2) return true;
+
+  const visible = text.replace(/\s+/g, '');
+  if (visible.length < 32) return false;
+
+  const allowed = (
+    visible.match(/[\u4e00-\u9fffA-Za-z0-9，。！？；：、（）《》“”‘’【】—,.!?;:()[\]<>/%+-]/g) || []
+  ).length;
+
+  return allowed / visible.length < 0.78;
+};
+
 const cleanTitle = (title: string): string => {
-  return title
+  return stripBrokenChars(title)
     .replace(/\s+-\s+[^-]+$/, '')
     .replace(/\s+/g, ' ')
     .trim();
@@ -62,7 +85,7 @@ const sanitizeLink = (link: string): string => {
 };
 
 const normalizeArticleText = (raw: string): string => {
-  const text = raw
+  const text = stripBrokenChars(raw)
     .replace(/\r/g, '\n')
     .replace(/\u00a0/g, ' ')
     .replace(/[ \t]+\n/g, '\n')
@@ -87,7 +110,7 @@ const cutChars = (text: string, maxChars: number): string => {
 };
 
 const normalizeSummaryText = (input: string): string => {
-  return input
+  return stripBrokenChars(input)
     .replace(/[#*_`>]/g, '')
     .replace(/[ \t]+/g, '')
     .replace(/\n+/g, '')
@@ -448,6 +471,7 @@ export const getFeaturedArticle = async (): Promise<FeaturedArticle> => {
   const items = await parseNewsItems();
   const ranked = [...items].sort((a, b) => scoreHeadline(b) - scoreHeadline(a));
   const selected = ranked[0] || fallbackItems()[0];
+  const fallbackBody = buildFallbackFeatureBody(items);
 
   const decodedUrl = selected.url ? await tryDecodeGoogleNewsLink(selected.url) : '';
   let body = '';
@@ -469,12 +493,17 @@ export const getFeaturedArticle = async (): Promise<FeaturedArticle> => {
     }
   }
 
-  if (body.length < 260) {
-    body = buildFallbackFeatureBody(items);
+  if (body.length < 260 || isLikelyCorruptedText(body)) {
+    body = fallbackBody;
   }
 
   const aiSummary = await summarizeWithGemini(selected.title, body);
-  const summary = aiSummary || extractiveSummary(selected.title, body);
+  let summary = aiSummary || extractiveSummary(selected.title, body);
+  summary = enforceSummaryLength(summary, body);
+
+  if (isLikelyCorruptedText(summary)) {
+    summary = extractiveSummary(selected.title, fallbackBody);
+  }
 
   return {
     title: selected.title,

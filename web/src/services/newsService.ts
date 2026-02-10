@@ -21,10 +21,13 @@ export interface FeaturedArticle {
   source: string;
   pubDate: string;
   url: string;
+  summary: string;
   body: string;
 }
 
 const GOOGLE_NEWS_HOST = 'news.google.com';
+const SUMMARY_MIN = 200;
+const SUMMARY_MAX = 300;
 const decoder = new GoogleDecoder();
 
 const cleanTitle = (title: string): string => {
@@ -74,6 +77,59 @@ const normalizeArticleText = (raw: string): string => {
     .map((line) => line.trim())
     .filter(Boolean)
     .join('\n');
+};
+
+const countChars = (text: string): number => [...text].length;
+
+const cutChars = (text: string, maxChars: number): string => {
+  const chars = [...text];
+  return chars.slice(0, maxChars).join('');
+};
+
+const normalizeSummaryText = (input: string): string => {
+  return input
+    .replace(/[#*_`>]/g, '')
+    .replace(/[ \t]+/g, '')
+    .replace(/\n+/g, '')
+    .replace(/^[：:;；，,。.!！？]+/, '')
+    .trim();
+};
+
+const sentenceSplit = (text: string): string[] => {
+  return (text.match(/[^。！？!?；;\n]+[。！？!?；;]?/g) || [])
+    .map((sentence) => sentence.trim())
+    .filter((sentence) => sentence.length > 2);
+};
+
+const enforceSummaryLength = (summary: string, sourceText: string): string => {
+  let current = normalizeSummaryText(summary);
+  const compactSource = normalizeSummaryText(sourceText);
+
+  if (countChars(current) > SUMMARY_MAX) {
+    current = cutChars(current, SUMMARY_MAX);
+    const cutAt = Math.max(
+      current.lastIndexOf('。'),
+      current.lastIndexOf('！'),
+      current.lastIndexOf('？'),
+      current.lastIndexOf(';'),
+      current.lastIndexOf('；'),
+    );
+    if (cutAt >= SUMMARY_MIN - 1) {
+      current = current.slice(0, cutAt + 1);
+    }
+  }
+
+  if (countChars(current) < SUMMARY_MIN) {
+    const missing = SUMMARY_MIN - countChars(current);
+    const appendPart = cutChars(compactSource, missing + 32);
+    current = normalizeSummaryText(`${current}${appendPart}`);
+  }
+
+  if (countChars(current) > SUMMARY_MAX) {
+    current = cutChars(current, SUMMARY_MAX);
+  }
+
+  return current;
 };
 
 const toNewsItem = (item: {
@@ -273,6 +329,110 @@ const buildFallbackFeatureBody = (items: NewsItem[]): string => {
   );
 };
 
+const keywordSetFromTitle = (title: string): string[] => {
+  const words = title
+    .toLowerCase()
+    .match(/[a-z0-9]{2,}|[\u4e00-\u9fff]{2,}/g);
+  if (!words) return [];
+  return Array.from(new Set(words)).slice(0, 12);
+};
+
+const extractiveSummary = (title: string, body: string): string => {
+  const normalizedBody = normalizeSummaryText(body);
+  const sentences = sentenceSplit(normalizedBody);
+  if (!sentences.length) {
+    return cutChars(normalizedBody, SUMMARY_MAX);
+  }
+
+  const keywords = keywordSetFromTitle(title);
+  const scored = sentences.map((sentence, index) => {
+    const keywordHits = keywords.reduce(
+      (sum, keyword) => (sentence.includes(keyword) ? sum + 1 : sum),
+      0,
+    );
+    const len = countChars(sentence);
+    const lengthScore = len >= 18 && len <= 48 ? 1.4 : len <= 60 ? 1 : 0.2;
+    return {
+      sentence,
+      index,
+      score: keywordHits * 2 + lengthScore + (index <= 1 ? 0.6 : 0),
+    };
+  });
+
+  const picked = scored
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 8)
+    .sort((a, b) => a.index - b.index)
+    .map((item) => item.sentence);
+
+  let summary = '';
+  for (const sentence of picked) {
+    if (countChars(summary) >= SUMMARY_MAX) break;
+    summary = `${summary}${sentence}`;
+  }
+
+  return enforceSummaryLength(summary, normalizedBody);
+};
+
+const summarizeWithGemini = async (title: string, source: string): Promise<string> => {
+  const apiKey = import.meta.env.GEMINI_API_KEY;
+  if (!apiKey) return '';
+
+  const prompt = [
+    '请把下面这篇数码新闻摘要为简体中文，必须满足：',
+    '1) 只输出一段正文，不要标题，不要序号，不要项目符号。',
+    `2) 字数必须在${SUMMARY_MIN}-${SUMMARY_MAX}字之间。`,
+    '3) 保留关键事实：产品/公司、时间、核心变化、影响。',
+    `新闻标题：${title}`,
+    `新闻正文：${source}`,
+  ].join('\n');
+
+  try {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: 'user',
+              parts: [{ text: prompt }],
+            },
+          ],
+          generationConfig: {
+            temperature: 0.2,
+            topP: 0.9,
+            maxOutputTokens: 380,
+          },
+        }),
+      },
+    );
+
+    if (!response.ok) return '';
+    const json = (await response.json()) as {
+      candidates?: Array<{
+        content?: {
+          parts?: Array<{ text?: string }>;
+        };
+      }>;
+    };
+
+    const text =
+      json.candidates?.[0]?.content?.parts
+        ?.map((part) => part.text || '')
+        .join('')
+        .trim() || '';
+
+    if (!text) return '';
+    return enforceSummaryLength(text, source);
+  } catch {
+    return '';
+  }
+};
+
 export const getGoogleHeadlines = async (): Promise<NewsData> => {
   const items = await parseNewsItems();
   const headlines = items.slice(0, 8);
@@ -313,11 +473,15 @@ export const getFeaturedArticle = async (): Promise<FeaturedArticle> => {
     body = buildFallbackFeatureBody(items);
   }
 
+  const aiSummary = await summarizeWithGemini(selected.title, body);
+  const summary = aiSummary || extractiveSummary(selected.title, body);
+
   return {
     title: selected.title,
     source: selected.source || 'Google News',
     pubDate: selected.pubDate,
     url: decodedUrl || selected.url,
+    summary,
     body,
   };
 };

@@ -43,18 +43,27 @@ npx wait-on http://127.0.0.1:3000
 npm run screenshot
 
 magick xc:"#000000" xc:"#FFFFFF" xc:"#FF0000" xc:"#FFFF00" xc:"#0000FF" xc:"#00FF00" xc:"#FF8000" +append palette.png
-for p in page1 page2 page3; do
-  magick ./dist/${p}.jpg \
+for p in page1 page2; do
+  magick ./dist/${p}.png \
     -colorspace sRGB \
-    -white-threshold 85% \
-    -black-threshold 15% \
-    -level 15%,85%,0.5 \
-    -sharpen 0x3 \
-    -dither FloydSteinberg \
+    -strip \
+    -contrast-stretch 0.2%x0.2% \
+    -sharpen 0x1.1 \
+    -ordered-dither o8x8,7 \
     -remap palette.png \
     -type truecolor \
     ./dist/${p}.bmp
 done
+
+# page3 保色优先（不要 remap 到 7 色盘）
+magick ./dist/page3.png \
+  -colorspace sRGB \
+  -strip \
+  -gamma 0.95 \
+  -modulate 104,106,100 \
+  -define bmp:format=bmp3 \
+  -type truecolor \
+  ./dist/page3.bmp
 ```
 
 ## 4) 用 SenseCraft 实现多页循环

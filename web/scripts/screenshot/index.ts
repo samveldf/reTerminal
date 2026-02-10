@@ -9,9 +9,9 @@ const HEIGHT = Number(process.env.HEIGHT || 480);
 const OUTPUT_DIR = process.env.OUTPUT_DIR || 'dist';
 
 const targets = [
-  { route: '/page1/', file: 'page1.jpg' },
-  { route: '/page2/', file: 'page2.jpg' },
-  { route: '/page3/', file: 'page3.jpg' },
+  { route: '/page1/', file: 'page1.png' },
+  { route: '/page2/', file: 'page2.png' },
+  { route: '/page3/', file: 'page3.png' },
 ];
 
 async function captureAllScreenshots() {
@@ -32,15 +32,14 @@ async function captureAllScreenshots() {
       await page.waitForTimeout(1200);
       await page.screenshot({
         path: outputPath,
-        type: 'jpeg',
-        quality: 92,
+        type: 'png',
         clip: { x: 0, y: 0, width: WIDTH, height: HEIGHT },
         animations: 'disabled',
       });
     }
 
-    await copyFile(path.join(OUTPUT_DIR, 'page1.jpg'), path.join(OUTPUT_DIR, 'screenshot.jpg'));
-    console.log('saved: page1.jpg page2.jpg page3.jpg');
+    await copyFile(path.join(OUTPUT_DIR, 'page1.png'), path.join(OUTPUT_DIR, 'screenshot.png'));
+    console.log('saved: page1.png page2.png page3.png');
   } finally {
     await browser.close();
   }

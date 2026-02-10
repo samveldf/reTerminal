@@ -43,6 +43,17 @@ const stripBrokenChars = (input: string): string => {
     .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '');
 };
 
+const stripScriptLikeFragments = (input: string): string => {
+  return input
+    .replace(/!\[[^\]]*\]\((?:https?:\/\/|www\.|mailto:|\b(?:javascript|vbscript|data)\s*:)[^)]*\)/gi, '')
+    .replace(/\[([^\]]{1,80})\]\((?:https?:\/\/|www\.|mailto:|\b(?:javascript|vbscript|data)\s*:)[^)]*\)/gi, '$1')
+    .replace(/\[\]\((?:https?:\/\/|www\.|mailto:|\b(?:javascript|vbscript|data)\s*:)[^)]*\)/gi, '')
+    .replace(/\((?:\s*\b(?:javascript|vbscript|data)\s*:)[^)]*\)/gi, '')
+    .replace(/\b(?:javascript|vbscript|data)\s*:[^\s）)\]]+/gi, '')
+    .replace(/!\[\]/g, '')
+    .replace(/\[\]/g, '');
+};
+
 const isLikelyCorruptedText = (input: string): boolean => {
   const text = input.trim();
   if (!text) return true;
@@ -92,7 +103,7 @@ const sanitizeLink = (link: string): string => {
 };
 
 const normalizeArticleText = (raw: string): string => {
-  const text = stripBrokenChars(raw)
+  const text = stripScriptLikeFragments(stripBrokenChars(raw))
     .replace(/\r/g, '\n')
     .replace(/\u00a0/g, ' ')
     .replace(/[ \t]+\n/g, '\n')
@@ -110,7 +121,7 @@ const normalizeArticleText = (raw: string): string => {
 };
 
 const normalizeSummaryText = (input: string): string => {
-  return stripBrokenChars(input)
+  return stripScriptLikeFragments(stripBrokenChars(input))
     .replace(/https?:\/\/\S+/gi, '')
     .replace(/www\.\S+/gi, '')
     .replace(/mailto:\S+/gi, '')

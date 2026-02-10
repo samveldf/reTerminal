@@ -25,16 +25,43 @@ const now = dayjs();
                 <span class="brief-time">{brief.pubDate ? dayjs(brief.pubDate).format('MM-DD HH:mm') : '--'}</span>
               </div>
               <h2 class="brief-title">{brief.title}</h2>
-              <p class="brief-summary">{brief.summary}</p>
+              <p class="brief-summary" data-brief-summary>{brief.summary}</p>
             </article>
           ))
         }
       </div>
-      <div class="meta-tag">3 BRIEFS / ~100 CHARS EACH</div>
+      <div class="meta-tag">3 BRIEFS / <=150 CHARS EACH</div>
     </section>
 
     <div class="corner-note">2 / 3</div>
   </main>
+
+  <script is:inline>
+    const fitBriefSummaries = () => {
+      const summaries = document.querySelectorAll('[data-brief-summary]');
+      summaries.forEach((summary) => {
+        let size = 13;
+        const min = 11;
+
+        const apply = () => {
+          summary.style.fontSize = `${size}px`;
+          summary.style.lineHeight = `${Math.round(size * 1.25)}px`;
+        };
+
+        apply();
+        while (size > min && summary.scrollHeight > summary.clientHeight) {
+          size -= 1;
+          apply();
+        }
+      });
+    };
+
+    window.addEventListener('load', fitBriefSummaries);
+    if (document.fonts?.ready) {
+      document.fonts.ready.then(() => setTimeout(fitBriefSummaries, 50));
+    }
+    setTimeout(fitBriefSummaries, 120);
+  </script>
 </BaseLayout>
 
 <style>
@@ -59,7 +86,7 @@ const now = dayjs();
     min-height: 0;
     display: grid;
     grid-template-rows: repeat(3, 1fr);
-    gap: 5px;
+    gap: 4px;
   }
 
   .brief-card {
@@ -108,8 +135,8 @@ const now = dayjs();
 
   .brief-title {
     margin: 0;
-    font-size: 19px;
-    line-height: 21px;
+    font-size: 15px;
+    line-height: 16px;
     color: var(--line);
     font-weight: 800;
     white-space: nowrap;
@@ -119,14 +146,13 @@ const now = dayjs();
 
   .brief-summary {
     margin: 0;
-    font-size: 15px;
-    line-height: 17px;
+    font-size: 13px;
+    line-height: 16px;
     color: var(--text);
     font-weight: 600;
     overflow: hidden;
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
+    word-break: break-word;
+    white-space: normal;
   }
 
   .meta-tag {

@@ -4,7 +4,7 @@
 
 生成结果：
 - `page1.bmp`：天气 + 室内温湿度 + 电量
-- `page2.bmp`：Google Gadget 新闻摘要
+- `page2.bmp`：3 条重点 Gadget 新闻摘要（每条约 100 字）
 - `page3.bmp`：`./DSC_2962.jpg` 图片页
 
 ## 1) `.env` 已配置
@@ -13,7 +13,8 @@
 - OpenWeather API Key
 - 东京坐标
 - Tokyo 天气
-- Google Gadget RSS
+- 综合重点新闻 RSS（Page1）
+- Gadget 新闻 RSS（Page2）
 - `FEATURE_IMAGE_URL=/DSC_2962.jpg`
 - `INDOOR_TEMP_C / INDOOR_HUMIDITY / DEVICE_BATTERY_PERCENT`（当前为页面展示值）
 
@@ -32,6 +33,11 @@ npm run dev
 - `http://localhost:3000/page2`
 - `http://localhost:3000/page3`
 - `http://localhost:3000/`（自动轮播）
+
+RSS 变量说明：
+- `GENERAL_NEWS_RSS_URL`：Page1 综合重点头条（默认 Google News 综合头条）
+- `GADGET_NEWS_RSS_URL`：Page2 数码/Gadget 头条（默认 Gadget 搜索 RSS）
+- `GOOGLE_NEWS_RSS_URL`：兼容旧配置，未设置上面两个变量时回退使用
 
 ## 3) 生成 3 页截图和 BMP
 
@@ -76,4 +82,4 @@ magick ./dist/page3.png \
 3. 设置轮播间隔（例如 20~60 秒）。
 4. Deploy 到 E1002。
 
-这样就是你要的“1页天气/设备信息、1页新闻摘要、1页图片”的循环显示。
+这样就是你要的“1页天气+综合重点头条、1页3条数码摘要、1页图片”的循环显示。

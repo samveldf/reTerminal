@@ -1,59 +1,40 @@
 ---
 import dayjs from 'dayjs';
 import BaseLayout from '../layouts/BaseLayout.astro';
-import { getFeaturedArticle } from '../services/newsService';
+import { getGadgetBriefs } from '../services/newsService';
 
-const featured = await getFeaturedArticle();
+const { briefs } = await getGadgetBriefs();
 const now = dayjs();
 ---
 
 <BaseLayout>
   <main class="epaper-screen page2-screen">
     <header class="cyber-header">
-      <div class="header-title">PAGE 2 // AI GADGET BRIEF</div>
+      <div class="header-title">PAGE 2 // KEY GADGET BRIEFS</div>
       <div class="header-time">{`UPDATED ${now.format('MM-DD HH:mm')}`}</div>
     </header>
 
-    <section class="panel summary-panel">
-      <div class="meta-line">
-        <span class="meta-source">{featured.source || 'Google News'}</span>
-        <span class="meta-time">{featured.pubDate ? dayjs(featured.pubDate).format('MM-DD HH:mm') : '--'}</span>
+    <section class="panel briefs-panel">
+      <div class="brief-list">
+        {
+          briefs.map((brief, idx) => (
+            <article class="brief-card">
+              <div class="brief-meta">
+                <span class="brief-index">{`#${idx + 1}`}</span>
+                <span class="brief-source">{brief.source || 'Google News'}</span>
+                <span class="brief-time">{brief.pubDate ? dayjs(brief.pubDate).format('MM-DD HH:mm') : '--'}</span>
+              </div>
+              <h2 class="brief-title">{brief.title}</h2>
+              <p class="brief-summary">{brief.summary}</p>
+            </article>
+          ))
+        }
       </div>
-
-      <h1 class="article-title">{featured.title}</h1>
-      <article class="article-summary" id="summaryBody">{featured.summary}</article>
-      <div class="meta-tag">{`AI SUMMARY ${[...featured.summary].length} CHARS`}</div>
+      <div class="meta-tag">3 BRIEFS / ~100 CHARS EACH</div>
     </section>
 
     <div class="corner-note">2 / 3</div>
   </main>
-
-  <script is:inline>
-    const fitSummary = () => {
-      const summary = document.getElementById('summaryBody');
-      if (!summary) return;
-
-      let size = 24;
-      const min = 15;
-
-      const apply = () => {
-        summary.style.fontSize = `${size}px`;
-        summary.style.lineHeight = `${Math.round(size * 1.28)}px`;
-      };
-
-      apply();
-      while (size > min && summary.scrollHeight > summary.clientHeight) {
-        size -= 1;
-        apply();
-      }
-    };
-
-    window.addEventListener('load', fitSummary);
-    if (document.fonts?.ready) {
-      document.fonts.ready.then(() => setTimeout(fitSummary, 50));
-    }
-    setTimeout(fitSummary, 100);
-  </script>
 </BaseLayout>
 
 <style>
@@ -63,7 +44,7 @@ const now = dayjs();
     gap: 6px;
   }
 
-  .summary-panel {
+  .briefs-panel {
     flex: 1;
     min-height: 0;
     border-color: var(--warn);
@@ -73,64 +54,85 @@ const now = dayjs();
     gap: 4px;
   }
 
-  .meta-line {
-    height: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    font-size: 13px;
-    line-height: 20px;
-    font-weight: 700;
-    border-bottom: 1px solid var(--accent);
-    padding-bottom: 2px;
+  .brief-list {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-rows: repeat(3, 1fr);
+    gap: 5px;
   }
 
-  .meta-source {
-    color: var(--accent);
-    text-transform: uppercase;
-    letter-spacing: 0.6px;
+  .brief-card {
+    border: 1px solid var(--line);
+    padding: 4px 6px;
+    background: #ffffff;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .brief-card:nth-child(2) {
+    border-color: var(--warn);
+  }
+
+  .brief-meta {
+    height: 14px;
+    display: grid;
+    grid-template-columns: 24px 1fr auto;
+    align-items: center;
+    column-gap: 6px;
+    line-height: 14px;
+  }
+
+  .brief-index {
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 800;
+  }
+
+  .brief-source {
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 700;
     white-space: nowrap;
+    overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  .meta-time {
+  .brief-time {
     color: var(--muted);
-    margin-left: 8px;
+    font-size: 11px;
+    font-weight: 700;
   }
 
-  .article-title {
+  .brief-title {
     margin: 0;
-    min-height: 39px;
-    max-height: 39px;
-    overflow: hidden;
+    font-size: 19px;
+    line-height: 21px;
     color: var(--line);
-    font-size: 17px;
     font-weight: 800;
-    line-height: 19px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .brief-summary {
+    margin: 0;
+    font-size: 15px;
+    line-height: 17px;
+    color: var(--text);
+    font-weight: 600;
+    overflow: hidden;
     display: -webkit-box;
-    -webkit-line-clamp: 2;
+    -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
   }
 
-  .article-summary {
-    flex: 1;
-    min-height: 0;
-    overflow: hidden;
-    color: var(--text);
-    white-space: pre-line;
-    word-break: break-word;
-    font-size: 20px;
-    line-height: 26px;
-    font-weight: 600;
-    letter-spacing: 0.1px;
-    padding-right: 2px;
-  }
-
   .meta-tag {
-    height: 18px;
+    height: 16px;
     color: var(--muted);
-    font-size: 12px;
+    font-size: 11px;
     line-height: 16px;
     font-weight: 700;
     text-align: right;

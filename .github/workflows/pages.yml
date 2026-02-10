@@ -44,6 +44,8 @@ jobs:
           OWM_LAT: ${{ vars.OWM_LAT }}
           OWM_LON: ${{ vars.OWM_LON }}
           WEATHER_CITY_LABEL: ${{ vars.WEATHER_CITY_LABEL }}
+          GENERAL_NEWS_RSS_URL: ${{ vars.GENERAL_NEWS_RSS_URL }}
+          GADGET_NEWS_RSS_URL: ${{ vars.GADGET_NEWS_RSS_URL }}
           GOOGLE_NEWS_RSS_URL: ${{ vars.GOOGLE_NEWS_RSS_URL }}
           FEATURE_IMAGE_URL: ${{ vars.FEATURE_IMAGE_URL }}
           DASHBOARD_TZ: ${{ vars.DASHBOARD_TZ }}

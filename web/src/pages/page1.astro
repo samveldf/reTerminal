@@ -12,7 +12,7 @@ const now = dayjs();
 <BaseLayout>
   <main class="epaper-screen page1-screen">
     <header class="cyber-header">
-      <div class="header-title">PAGE 1 // WEATHER + GADGET NEWS</div>
+      <div class="header-title">PAGE 1 // WEATHER + TOP NEWS</div>
       <div class="header-time">{`TOKYO ${now.format('MM-DD HH:mm')}`}</div>
     </header>
 
@@ -40,7 +40,7 @@ const now = dayjs();
       </section>
 
       <section class="panel news-panel">
-        <div class="section-head">GADGET HEADLINES</div>
+        <div class="section-head">TOP HEADLINES</div>
         <div class="headline-list">
           {
             news.headlines.slice(0, 6).map((item, idx) => (

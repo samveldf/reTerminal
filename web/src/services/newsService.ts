@@ -2,7 +2,11 @@ import { XMLParser } from 'fast-xml-parser';
 import { Readability } from '@mozilla/readability';
 import { JSDOM } from 'jsdom';
 import { GoogleDecoder } from 'google-news-url-decoder';
-import { fetchNews } from '../apis/news';
+import {
+  DEFAULT_GADGET_NEWS_RSS,
+  DEFAULT_GENERAL_NEWS_RSS,
+  fetchNews,
+} from '../apis/news';
 
 export interface NewsItem {
   title: string;
@@ -16,18 +20,21 @@ export interface NewsData {
   headlines: NewsItem[];
 }
 
-export interface FeaturedArticle {
+export interface GadgetBrief {
   title: string;
   source: string;
   pubDate: string;
   url: string;
   summary: string;
-  body: string;
+}
+
+export interface GadgetBriefData {
+  briefs: GadgetBrief[];
 }
 
 const GOOGLE_NEWS_HOST = 'news.google.com';
-const SUMMARY_MIN = 200;
-const SUMMARY_MAX = 300;
+const GADGET_BRIEF_MIN = 90;
+const GADGET_BRIEF_MAX = 120;
 const decoder = new GoogleDecoder();
 
 const stripBrokenChars = (input: string): string => {
@@ -47,7 +54,7 @@ const isLikelyCorruptedText = (input: string): boolean => {
   if (visible.length < 32) return false;
 
   const allowed = (
-    visible.match(/[\u4e00-\u9fffA-Za-z0-9，。！？；：、（）《》“”‘’【】—,.!?;:()[\]<>/%+-]/g) || []
+    visible.match(/[\u4e00-\u9fffA-Za-z0-9，。！？；：、（）《》“”‘’【】—,.!?;:()[\]<>/%+\-]/g) || []
   ).length;
 
   return allowed / visible.length < 0.78;
@@ -102,13 +109,6 @@ const normalizeArticleText = (raw: string): string => {
     .join('\n');
 };
 
-const countChars = (text: string): number => [...text].length;
-
-const cutChars = (text: string, maxChars: number): string => {
-  const chars = [...text];
-  return chars.slice(0, maxChars).join('');
-};
-
 const normalizeSummaryText = (input: string): string => {
   return stripBrokenChars(input)
     .replace(/[#*_`>]/g, '')
@@ -118,18 +118,30 @@ const normalizeSummaryText = (input: string): string => {
     .trim();
 };
 
+const countChars = (text: string): number => [...text].length;
+
+const cutChars = (text: string, maxChars: number): string => {
+  const chars = [...text];
+  return chars.slice(0, maxChars).join('');
+};
+
 const sentenceSplit = (text: string): string[] => {
   return (text.match(/[^。！？!?；;\n]+[。！？!?；;]?/g) || [])
     .map((sentence) => sentence.trim())
     .filter((sentence) => sentence.length > 2);
 };
 
-const enforceSummaryLength = (summary: string, sourceText: string): string => {
-  let current = normalizeSummaryText(summary);
+const enforceTextLength = (
+  text: string,
+  sourceText: string,
+  minChars: number,
+  maxChars: number,
+): string => {
+  let current = normalizeSummaryText(text);
   const compactSource = normalizeSummaryText(sourceText);
 
-  if (countChars(current) > SUMMARY_MAX) {
-    current = cutChars(current, SUMMARY_MAX);
+  if (countChars(current) > maxChars) {
+    current = cutChars(current, maxChars);
     const cutAt = Math.max(
       current.lastIndexOf('。'),
       current.lastIndexOf('！'),
@@ -137,19 +149,19 @@ const enforceSummaryLength = (summary: string, sourceText: string): string => {
       current.lastIndexOf(';'),
       current.lastIndexOf('；'),
     );
-    if (cutAt >= SUMMARY_MIN - 1) {
+    if (cutAt >= minChars - 1) {
       current = current.slice(0, cutAt + 1);
     }
   }
 
-  if (countChars(current) < SUMMARY_MIN) {
-    const missing = SUMMARY_MIN - countChars(current);
-    const appendPart = cutChars(compactSource, missing + 32);
+  if (countChars(current) < minChars) {
+    const missing = minChars - countChars(current);
+    const appendPart = cutChars(compactSource, missing + 24);
     current = normalizeSummaryText(`${current}${appendPart}`);
   }
 
-  if (countChars(current) > SUMMARY_MAX) {
-    current = cutChars(current, SUMMARY_MAX);
+  if (countChars(current) > maxChars) {
+    current = cutChars(current, maxChars);
   }
 
   return current;
@@ -169,9 +181,23 @@ const toNewsItem = (item: {
   description: stripHtml(item.description || ''),
 });
 
-const scoreHeadline = (item: NewsItem): number => {
+const scoreGadgetHeadline = (item: NewsItem): number => {
   const text = `${item.title} ${item.description}`.toLowerCase();
-  const positive = ['评测', '体验', '深度', '解读', '首发', '发布', '芯片', '影像', '折叠', 'ai', '大模型'];
+  const positive = [
+    '评测',
+    '体验',
+    '深度',
+    '解读',
+    '首发',
+    '发布',
+    '芯片',
+    '影像',
+    '折叠',
+    'ai',
+    '大模型',
+    '旗舰',
+    '性能',
+  ];
   const negative = ['补贴', '抽奖', '话费', '促销', '福利', '优惠'];
 
   let score = 0;
@@ -181,7 +207,8 @@ const scoreHeadline = (item: NewsItem): number => {
   for (const kw of negative) {
     if (text.includes(kw)) score -= 2;
   }
-  if (item.title.length >= 20) score += 1;
+
+  if (item.title.length >= 16) score += 1;
 
   const pub = Date.parse(item.pubDate);
   if (!Number.isNaN(pub)) {
@@ -192,16 +219,100 @@ const scoreHeadline = (item: NewsItem): number => {
   return score;
 };
 
-const fallbackItems = (): NewsItem[] => [
+const scoreGeneralHeadline = (item: NewsItem): number => {
+  const text = `${item.title} ${item.description}`.toLowerCase();
+  const positive = [
+    '突发',
+    '最新',
+    '要闻',
+    '发布',
+    '政策',
+    '经济',
+    '金融',
+    '国际',
+    'ai',
+    '科技',
+    '芯片',
+    '能源',
+    '安全',
+    '市场',
+  ];
+  const negative = ['折扣', '优惠', '抽奖', '福利', '促销', '团购'];
+
+  let score = 0;
+  for (const kw of positive) {
+    if (text.includes(kw)) score += 1.6;
+  }
+  for (const kw of negative) {
+    if (text.includes(kw)) score -= 2;
+  }
+
+  if (item.title.length >= 14) score += 0.8;
+
+  const pub = Date.parse(item.pubDate);
+  if (!Number.isNaN(pub)) {
+    const ageHours = (Date.now() - pub) / 3_600_000;
+    score += Math.max(0, 36 - ageHours) / 14;
+  }
+
+  return score;
+};
+
+const fallbackGeneralItems = (): NewsItem[] => [
   {
-    title: '暂无可用资讯，请检查网络连接',
+    title: '暂无可用重点新闻，请检查网络连接',
     url: '',
     pubDate: '',
     source: '',
     description: '',
   },
   {
-    title: '请确认 Google News RSS 地址可访问',
+    title: '请确认综合 RSS 地址可访问',
+    url: '',
+    pubDate: '',
+    source: '',
+    description: '',
+  },
+  {
+    title: '系统将在下次刷新时自动重试',
+    url: '',
+    pubDate: '',
+    source: '',
+    description: '',
+  },
+  {
+    title: '可在 web/.env 调整 GENERAL_NEWS_RSS_URL',
+    url: '',
+    pubDate: '',
+    source: '',
+    description: '',
+  },
+  {
+    title: '建议使用 Google News 综合头条 RSS',
+    url: '',
+    pubDate: '',
+    source: '',
+    description: '',
+  },
+  {
+    title: '当前页面仅显示重点 headlines',
+    url: '',
+    pubDate: '',
+    source: '',
+    description: '',
+  },
+];
+
+const fallbackGadgetItems = (): NewsItem[] => [
+  {
+    title: '暂无可用数码新闻，请检查网络连接',
+    url: '',
+    pubDate: '',
+    source: '',
+    description: '',
+  },
+  {
+    title: '请确认 Gadget RSS 地址可访问',
     url: '',
     pubDate: '',
     source: '',
@@ -214,66 +325,35 @@ const fallbackItems = (): NewsItem[] => [
     source: '',
     description: '',
   },
-  {
-    title: '可在 web/.env 修改 RSS 搜索关键词',
-    url: '',
-    pubDate: '',
-    source: '',
-    description: '',
-  },
-  {
-    title: '建议使用中文科技关键词获取更稳定结果',
-    url: '',
-    pubDate: '',
-    source: '',
-    description: '',
-  },
-  {
-    title: '示例：数码 手机 AI 芯片 可穿戴',
-    url: '',
-    pubDate: '',
-    source: '',
-    description: '',
-  },
-  {
-    title: '保持页面仅展示 headlines 可减少截断',
-    url: '',
-    pubDate: '',
-    source: '',
-    description: '',
-  },
-  {
-    title: '当前页面已按全屏填充排版',
-    url: '',
-    pubDate: '',
-    source: '',
-    description: '',
-  },
 ];
 
-const errorNews = (): NewsData => ({
-  headlines: fallbackItems(),
-});
+const dedupeByTitle = (items: NewsItem[]): NewsItem[] => {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = item.title.toLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
 
-const parseNewsItems = async (): Promise<NewsItem[]> => {
+const parseNewsItems = async (feedUrl: string, fallback: NewsItem[]): Promise<NewsItem[]> => {
   let response = '';
   try {
-    response = await fetchNews();
+    response = await fetchNews(feedUrl);
   } catch (error) {
     console.error('news fetch error:', error);
-    return fallbackItems();
+    return fallback;
   }
 
   const parser = new XMLParser();
   const xml = parser.parse(response);
   const rawItems = xml?.rss?.channel?.item;
 
-  if (!rawItems) {
-    return fallbackItems();
-  }
+  if (!rawItems) return fallback;
 
   const items = (Array.isArray(rawItems) ? rawItems : [rawItems])
-    .slice(0, 16)
+    .slice(0, 24)
     .map(
       (item: {
         title?: string;
@@ -282,9 +362,18 @@ const parseNewsItems = async (): Promise<NewsItem[]> => {
         description?: string;
         source?: { '#text'?: string } | string;
       }) => toNewsItem(item),
-    );
+    )
+    .filter((item) => !!item.title && !item.title.includes('N/A'));
 
-  return items;
+  return dedupeByTitle(items);
+};
+
+const resolveGeneralRssUrl = (): string => {
+  return import.meta.env.GENERAL_NEWS_RSS_URL || import.meta.env.GOOGLE_NEWS_RSS_URL || DEFAULT_GENERAL_NEWS_RSS;
+};
+
+const resolveGadgetRssUrl = (): string => {
+  return import.meta.env.GADGET_NEWS_RSS_URL || import.meta.env.GOOGLE_NEWS_RSS_URL || DEFAULT_GADGET_NEWS_RSS;
 };
 
 const tryDecodeGoogleNewsLink = async (url: string): Promise<string> => {
@@ -292,9 +381,7 @@ const tryDecodeGoogleNewsLink = async (url: string): Promise<string> => {
     const host = new URL(url).hostname;
     if (!host.includes(GOOGLE_NEWS_HOST)) return url;
     const decoded = await decoder.decode(url);
-    if (decoded?.status && decoded.decoded_url) {
-      return decoded.decoded_url;
-    }
+    if (decoded?.status && decoded.decoded_url) return decoded.decoded_url;
     return url;
   } catch {
     return url;
@@ -341,17 +428,6 @@ const extractViaJinaProxy = async (url: string): Promise<string> => {
   return normalizeArticleText(body);
 };
 
-const buildFallbackFeatureBody = (items: NewsItem[]): string => {
-  const merged = items
-    .slice(0, 8)
-    .map((item, index) => `${index + 1}. ${item.title}`)
-    .join('\n');
-
-  return normalizeArticleText(
-    `今日数码资讯重点如下：\n${merged}\n\n以上内容基于最新 RSS 头条自动生成，系统将在下次刷新尝试抓取单篇原文全文。`,
-  );
-};
-
 const keywordSetFromTitle = (title: string): string[] => {
   const words = title
     .toLowerCase()
@@ -360,11 +436,17 @@ const keywordSetFromTitle = (title: string): string[] => {
   return Array.from(new Set(words)).slice(0, 12);
 };
 
-const extractiveSummary = (title: string, body: string): string => {
+const extractiveSummary = (
+  title: string,
+  body: string,
+  minChars: number,
+  maxChars: number,
+): string => {
   const normalizedBody = normalizeSummaryText(body);
   const sentences = sentenceSplit(normalizedBody);
+
   if (!sentences.length) {
-    return cutChars(normalizedBody, SUMMARY_MAX);
+    return enforceTextLength(normalizedBody, normalizedBody, minChars, maxChars);
   }
 
   const keywords = keywordSetFromTitle(title);
@@ -374,11 +456,11 @@ const extractiveSummary = (title: string, body: string): string => {
       0,
     );
     const len = countChars(sentence);
-    const lengthScore = len >= 18 && len <= 48 ? 1.4 : len <= 60 ? 1 : 0.2;
+    const lengthScore = len >= 16 && len <= 48 ? 1.4 : len <= 70 ? 1 : 0.2;
     return {
       sentence,
       index,
-      score: keywordHits * 2 + lengthScore + (index <= 1 ? 0.6 : 0),
+      score: keywordHits * 2 + lengthScore + (index <= 1 ? 0.5 : 0),
     };
   });
 
@@ -390,21 +472,26 @@ const extractiveSummary = (title: string, body: string): string => {
 
   let summary = '';
   for (const sentence of picked) {
-    if (countChars(summary) >= SUMMARY_MAX) break;
+    if (countChars(summary) >= maxChars) break;
     summary = `${summary}${sentence}`;
   }
 
-  return enforceSummaryLength(summary, normalizedBody);
+  return enforceTextLength(summary, normalizedBody, minChars, maxChars);
 };
 
-const summarizeWithGemini = async (title: string, source: string): Promise<string> => {
+const summarizeWithGemini = async (
+  title: string,
+  source: string,
+  minChars: number,
+  maxChars: number,
+): Promise<string> => {
   const apiKey = import.meta.env.GEMINI_API_KEY;
   if (!apiKey) return '';
 
   const prompt = [
-    '请把下面这篇数码新闻摘要为简体中文，必须满足：',
+    '请把下面这篇新闻摘要为简体中文，必须满足：',
     '1) 只输出一段正文，不要标题，不要序号，不要项目符号。',
-    `2) 字数必须在${SUMMARY_MIN}-${SUMMARY_MAX}字之间。`,
+    `2) 字数必须在${minChars}-${maxChars}字之间。`,
     '3) 保留关键事实：产品/公司、时间、核心变化、影响。',
     `新闻标题：${title}`,
     `新闻正文：${source}`,
@@ -428,7 +515,7 @@ const summarizeWithGemini = async (title: string, source: string): Promise<strin
           generationConfig: {
             temperature: 0.2,
             topP: 0.9,
-            maxOutputTokens: 380,
+            maxOutputTokens: 260,
           },
         }),
       },
@@ -450,67 +537,102 @@ const summarizeWithGemini = async (title: string, source: string): Promise<strin
         .trim() || '';
 
     if (!text) return '';
-    return enforceSummaryLength(text, source);
+    return enforceTextLength(text, source, minChars, maxChars);
   } catch {
     return '';
   }
 };
 
+const buildFallbackBriefBody = (item: NewsItem, items: NewsItem[]): string => {
+  const merged = items
+    .slice(0, 6)
+    .map((news, index) => `${index + 1}. ${news.title}`)
+    .join('。');
+
+  return normalizeArticleText(`${item.title}。${item.description}。${merged}`);
+};
+
+const getArticleBody = async (url: string): Promise<string> => {
+  if (!url) return '';
+
+  try {
+    const html = await fetchTextWithTimeout(url, 15_000);
+    const readable = extractReadableBody(html, url);
+    if (readable.length >= 120 && !isLikelyCorruptedText(readable)) {
+      return readable;
+    }
+  } catch (error) {
+    console.error('featured article fetch error:', error);
+  }
+
+  try {
+    const proxyBody = await extractViaJinaProxy(url);
+    if (proxyBody.length >= 120 && !isLikelyCorruptedText(proxyBody)) {
+      return proxyBody;
+    }
+  } catch (error) {
+    console.error('featured article proxy error:', error);
+  }
+
+  return '';
+};
+
+const toFallbackBrief = (index: number): GadgetBrief => {
+  return {
+    title: `数码简报 ${index + 1}`,
+    source: 'Google News',
+    pubDate: '',
+    url: '',
+    summary: '当前未拉取到足够的数码资讯，系统将在下次刷新时自动重试。请检查 RSS 地址和网络连接状态。',
+  };
+};
+
+const buildGadgetBrief = async (item: NewsItem, allItems: NewsItem[]): Promise<GadgetBrief> => {
+  const decodedUrl = item.url ? await tryDecodeGoogleNewsLink(item.url) : '';
+  const body = (await getArticleBody(decodedUrl)) || buildFallbackBriefBody(item, allItems);
+
+  const aiSummary = await summarizeWithGemini(item.title, body, GADGET_BRIEF_MIN, GADGET_BRIEF_MAX);
+  let summary = aiSummary || extractiveSummary(item.title, body, GADGET_BRIEF_MIN, GADGET_BRIEF_MAX);
+  summary = enforceTextLength(summary, body, GADGET_BRIEF_MIN, GADGET_BRIEF_MAX);
+
+  if (isLikelyCorruptedText(summary)) {
+    summary = extractiveSummary(item.title, buildFallbackBriefBody(item, allItems), GADGET_BRIEF_MIN, GADGET_BRIEF_MAX);
+  }
+
+  return {
+    title: item.title,
+    source: item.source || 'Google News',
+    pubDate: item.pubDate,
+    url: decodedUrl || item.url,
+    summary,
+  };
+};
+
 export const getGoogleHeadlines = async (): Promise<NewsData> => {
-  const items = await parseNewsItems();
-  const headlines = items.slice(0, 8);
+  const items = await parseNewsItems(resolveGeneralRssUrl(), fallbackGeneralItems());
+  const ranked = [...items].sort((a, b) => scoreGeneralHeadline(b) - scoreGeneralHeadline(a));
+  const headlines = ranked.slice(0, 8);
 
   if (!headlines.length) {
-    return errorNews();
+    return { headlines: fallbackGeneralItems() };
   }
 
   return { headlines };
 };
 
-export const getFeaturedArticle = async (): Promise<FeaturedArticle> => {
-  const items = await parseNewsItems();
-  const ranked = [...items].sort((a, b) => scoreHeadline(b) - scoreHeadline(a));
-  const selected = ranked[0] || fallbackItems()[0];
-  const fallbackBody = buildFallbackFeatureBody(items);
+export const getGadgetBriefs = async (): Promise<GadgetBriefData> => {
+  const items = await parseNewsItems(resolveGadgetRssUrl(), fallbackGadgetItems());
+  const ranked = [...items].sort((a, b) => scoreGadgetHeadline(b) - scoreGadgetHeadline(a));
+  const selected = ranked.slice(0, 3);
 
-  const decodedUrl = selected.url ? await tryDecodeGoogleNewsLink(selected.url) : '';
-  let body = '';
-
-  if (decodedUrl) {
-    try {
-      const html = await fetchTextWithTimeout(decodedUrl, 15_000);
-      body = extractReadableBody(html, decodedUrl);
-    } catch (error) {
-      console.error('featured article fetch error:', error);
-    }
-
-    if (body.length < 260) {
-      try {
-        body = await extractViaJinaProxy(decodedUrl);
-      } catch (error) {
-        console.error('featured article proxy error:', error);
-      }
-    }
+  if (!selected.length) {
+    return { briefs: [toFallbackBrief(0), toFallbackBrief(1), toFallbackBrief(2)] };
   }
 
-  if (body.length < 260 || isLikelyCorruptedText(body)) {
-    body = fallbackBody;
+  const briefs = await Promise.all(selected.map((item) => buildGadgetBrief(item, ranked)));
+  while (briefs.length < 3) {
+    briefs.push(toFallbackBrief(briefs.length));
   }
 
-  const aiSummary = await summarizeWithGemini(selected.title, body);
-  let summary = aiSummary || extractiveSummary(selected.title, body);
-  summary = enforceSummaryLength(summary, body);
-
-  if (isLikelyCorruptedText(summary)) {
-    summary = extractiveSummary(selected.title, fallbackBody);
-  }
-
-  return {
-    title: selected.title,
-    source: selected.source || 'Google News',
-    pubDate: selected.pubDate,
-    url: decodedUrl || selected.url,
-    summary,
-    body,
-  };
+  return { briefs };
 };

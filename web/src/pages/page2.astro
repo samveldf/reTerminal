@@ -30,7 +30,7 @@ const now = dayjs();
           ))
         }
       </div>
-      <div class="meta-tag">3 BRIEFS / <=150 CHARS EACH</div>
+      <div class="meta-tag">3 BRIEFS / ~200 CHARS EACH</div>
     </section>
 
     <div class="corner-note">2 / 3</div>
@@ -40,8 +40,8 @@ const now = dayjs();
     const fitBriefSummaries = () => {
       const summaries = document.querySelectorAll('[data-brief-summary]');
       summaries.forEach((summary) => {
-        let size = 13;
-        const min = 11;
+        let size = 14;
+        const min = 10;
 
         const apply = () => {
           summary.style.fontSize = `${size}px`;
@@ -135,8 +135,8 @@ const now = dayjs();
 
   .brief-title {
     margin: 0;
-    font-size: 15px;
-    line-height: 16px;
+    font-size: 16px;
+    line-height: 18px;
     color: var(--line);
     font-weight: 800;
     white-space: nowrap;
@@ -146,8 +146,8 @@ const now = dayjs();
 
   .brief-summary {
     margin: 0;
-    font-size: 13px;
-    line-height: 16px;
+    font-size: 14px;
+    line-height: 18px;
     color: var(--text);
     font-weight: 600;
     overflow: hidden;

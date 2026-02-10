@@ -33,8 +33,8 @@ export interface GadgetBriefData {
 }
 
 const GOOGLE_NEWS_HOST = 'news.google.com';
-const GADGET_BRIEF_MIN = 100;
-const GADGET_BRIEF_MAX = 150;
+const GADGET_BRIEF_MIN = 180;
+const GADGET_BRIEF_MAX = 220;
 const decoder = new GoogleDecoder();
 
 const stripBrokenChars = (input: string): string => {

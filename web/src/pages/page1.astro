@@ -72,7 +72,7 @@ const now = dayjs();
   }
 
   .weather-panel {
-    flex: 7;
+    flex: 10;
     min-height: 0;
     border-color: var(--line);
     padding: 6px;
@@ -82,7 +82,7 @@ const now = dayjs();
   }
 
   .news-panel {
-    flex: 13;
+    flex: 10;
     min-height: 0;
     border-color: var(--warn);
     padding: 6px;
@@ -112,7 +112,7 @@ const now = dayjs();
 
   .day-card {
     border: 1px solid var(--line);
-    padding: 6px 7px;
+    padding: 7px 8px;
     overflow: hidden;
     background:
       linear-gradient(180deg, rgba(0, 0, 255, 0.06), rgba(255, 255, 255, 0) 52%),
@@ -120,60 +120,60 @@ const now = dayjs();
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
-    gap: 2px;
+    gap: 3px;
   }
 
   .day-head {
     display: flex;
     justify-content: space-between;
     color: var(--accent);
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 700;
     margin-bottom: 0;
-    line-height: 14px;
+    line-height: 16px;
   }
 
   .day-main {
     display: flex;
     align-items: center;
-    gap: 4px;
-    line-height: 16px;
+    gap: 5px;
+    line-height: 21px;
   }
 
   .icon-emoji {
     color: var(--line);
-    font-size: 15px;
-    line-height: 15px;
+    font-size: 20px;
+    line-height: 20px;
   }
 
   .icon-symbol {
     color: var(--line);
-    font-size: 15px;
+    font-size: 20px;
     font-weight: 800;
-    line-height: 16px;
+    line-height: 21px;
   }
 
   .day-desc {
-    font-size: 10px;
-    line-height: 11px;
+    font-size: 13px;
+    line-height: 14px;
     color: var(--text);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    min-height: 10px;
+    min-height: 14px;
   }
 
   .day-temps {
     color: var(--line);
-    font-size: 14px;
-    line-height: 14px;
+    font-size: 16px;
+    line-height: 17px;
     font-weight: 800;
   }
 
   .day-extra {
     color: var(--muted);
-    font-size: 10px;
-    line-height: 11px;
+    font-size: 13px;
+    line-height: 14px;
     font-weight: 700;
   }
 
@@ -187,14 +187,16 @@ const now = dayjs();
 
   .headline-item {
     border-left: 3px solid var(--line);
-    padding-left: 6px;
-    font-size: 12px;
-    line-height: 15px;
+    padding-left: 7px;
+    font-size: 15px;
+    line-height: 19px;
     color: var(--text);
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
     font-weight: 700;
+    display: flex;
+    align-items: center;
   }
 
   .corner-note {

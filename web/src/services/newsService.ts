@@ -54,6 +54,101 @@ const stripScriptLikeFragments = (input: string): string => {
     .replace(/\[\]/g, '');
 };
 
+const escapeRegExp = (input: string): string => {
+  return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+};
+
+const stripTimestampNoise = (input: string): string => {
+  return input
+    .replace(/\b20\d{2}[./-]\d{1,2}[./-]\d{1,2}\d{1,2}:\d{2}(?::\d{2})?\b/g, '')
+    .replace(/\b20\d{2}[年./-]\d{1,2}[月./-]\d{1,2}(?:日)?(?:\s*\d{1,2}:\d{2}(?::\d{2})?)?\b/g, '')
+    .replace(/\b\d{1,2}月\d{1,2}日(?:\s*\d{1,2}:\d{2}(?::\d{2})?)?\b/g, '')
+    .replace(/\b\d{1,2}:\d{2}(?::\d{2})?\b/g, '');
+};
+
+const normalizeLooseComparable = (input: string): string => {
+  return input.toLowerCase().replace(/[\s\-_.,，。:：;；!！?？'"“”‘’`~()[\]{}<>|/\\]/g, '');
+};
+
+const stripLeadingTitleNoise = (summary: string, title: string): string => {
+  const titleCompact = cleanTitle(title).replace(/\s+/g, '');
+  if (titleCompact.length < 6) return summary;
+
+  const loosePattern = [...titleCompact]
+    .slice(0, 72)
+    .map((ch) => escapeRegExp(ch))
+    .join('[\\s，。,:：;；\\-—|｜_]*');
+
+  let text = summary.replace(
+    new RegExp(`^(?:${loosePattern})[\\s，。,:：;；\\-—|｜_]*`, 'i'),
+    '',
+  );
+
+  const normalizedTitle = normalizeLooseComparable(titleCompact).replace(/\d+/g, '');
+  if (normalizedTitle.length >= 8) {
+    const firstSentence = (text.match(/^[^。！？!?；;]{1,90}/) || [''])[0].trim();
+    const firstNorm = normalizeLooseComparable(firstSentence).replace(/\d+/g, '');
+    const key = normalizedTitle.slice(0, Math.min(16, normalizedTitle.length));
+    if (key && firstNorm.includes(key)) {
+      text = text.slice(firstSentence.length);
+    }
+  }
+
+  return text.replace(/^[，,。;；:：\-\s]+/, '');
+};
+
+const stripTitleEchoSentence = (summary: string, title: string): string => {
+  const normalizedTitle = normalizeLooseComparable(cleanTitle(title)).replace(/\d+/g, '');
+  if (normalizedTitle.length < 8) return summary;
+
+  const sentences = sentenceSplit(summary);
+  if (sentences.length < 2) return summary;
+
+  const first = sentences[0];
+  const firstNormalized = normalizeLooseComparable(first).replace(/\d+/g, '');
+  const firstSimilarity = jaccard(
+    buildSimilarityTokensFromText(firstNormalized),
+    buildSimilarityTokensFromText(normalizedTitle),
+  );
+  const titleHead = normalizedTitle.slice(0, Math.min(14, normalizedTitle.length));
+  const isEcho = firstSimilarity >= 0.38 || (titleHead.length >= 8 && firstNormalized.includes(titleHead));
+  if (!isEcho) return summary;
+
+  const compactRest = sentences.slice(1).join('');
+  if ([...compactRest].length < 36) return summary;
+  return compactRest.replace(/^[，,。;；:：\-\s]+/, '');
+};
+
+const stripSourceNoise = (summary: string, source: string): string => {
+  const sourceCompact = cleanSource(source)
+    .replace(/\s+/g, '')
+    .replace(/[|｜]/g, '')
+    .trim();
+  if (sourceCompact.length < 2) return summary;
+
+  const sourcePattern = escapeRegExp(sourceCompact);
+  return summary
+    .replace(new RegExp(sourcePattern, 'gi'), '')
+    .replace(
+      new RegExp(`(?:${sourcePattern}[，,。:：;；\\-—|｜\\s]*){2,}`, 'gi'),
+      `${sourceCompact}，`,
+    )
+    .replace(new RegExp(`^${sourcePattern}[，,。:：;；\\-—|｜\\s]*`, 'i'), '');
+};
+
+const cleanupBriefNoise = (summary: string, title: string, source: string): string => {
+  return stripTitleEchoSentence(
+    stripLeadingTitleNoise(stripSourceNoise(stripTimestampNoise(summary), source), title),
+    title,
+  )
+    .replace(/([\u4e00-\u9fffA-Za-z0-9]{3,16})\1{1,}/g, '$1')
+    .replace(/([A-Za-z0-9\u4e00-\u9fff]{2,20})(?:-\1){1,}/g, '$1')
+    .replace(/[，,]{2,}/g, '，')
+    .replace(/[。．]{2,}/g, '。')
+    .replace(/^[，,。;；:：\-\s]+/, '')
+    .trim();
+};
+
 const isLikelyCorruptedText = (input: string): boolean => {
   const text = input.trim();
   if (!text) return true;
@@ -76,6 +171,30 @@ const cleanTitle = (title: string): string => {
     .replace(/\s+-\s+[^-]+$/, '')
     .replace(/\s+/g, ' ')
     .trim();
+};
+
+const cleanSource = (source: string): string => {
+  const compact = stripBrokenChars(source || '')
+    .replace(/\s+/g, '')
+    .replace(/[|｜]/g, '-')
+    .replace(/[—–]+/g, '-')
+    .replace(/[()（）【】[\]]/g, '')
+    .trim();
+  if (!compact) return '';
+
+  const deduped = compact
+    .replace(/([A-Za-z0-9\u4e00-\u9fff]{2,20})(?:-\1)+/gi, '$1')
+    .replace(/([A-Za-z0-9\u4e00-\u9fff]{2,20})\1{1,}/gi, '$1')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  const parts = deduped.split('-').filter(Boolean);
+  const unique: string[] = [];
+  for (const part of parts) {
+    if (!unique.includes(part)) unique.push(part);
+  }
+  const merged = unique.length ? unique.join('-') : deduped;
+  return merged.length > 18 ? merged.slice(0, 18) : merged;
 };
 
 const decodeEntities = (input: string): string => {
@@ -103,7 +222,7 @@ const sanitizeLink = (link: string): string => {
 };
 
 const normalizeArticleText = (raw: string): string => {
-  const text = stripScriptLikeFragments(stripBrokenChars(raw))
+  const text = stripTimestampNoise(stripScriptLikeFragments(stripBrokenChars(raw)))
     .replace(/\r/g, '\n')
     .replace(/\u00a0/g, ' ')
     .replace(/[ \t]+\n/g, '\n')
@@ -121,7 +240,7 @@ const normalizeArticleText = (raw: string): string => {
 };
 
 const normalizeSummaryText = (input: string): string => {
-  return stripScriptLikeFragments(stripBrokenChars(input))
+  return stripTimestampNoise(stripScriptLikeFragments(stripBrokenChars(input)))
     .replace(/https?:\/\/\S+/gi, '')
     .replace(/www\.\S+/gi, '')
     .replace(/mailto:\S+/gi, '')
@@ -199,7 +318,7 @@ const toNewsItem = (item: {
   title: cleanTitle(item.title || 'N/A'),
   url: sanitizeLink(item.link || ''),
   pubDate: item.pubDate || '',
-  source: typeof item.source === 'string' ? item.source : item.source?.['#text'] || '',
+  source: cleanSource(typeof item.source === 'string' ? item.source : item.source?.['#text'] || ''),
   description: stripHtml(item.description || ''),
 });
 
@@ -771,13 +890,21 @@ const toFallbackBrief = (index: number): GadgetBrief => {
 const buildGadgetBrief = async (item: NewsItem, allItems: NewsItem[]): Promise<GadgetBrief> => {
   const decodedUrl = item.url ? await tryDecodeGoogleNewsLink(item.url) : '';
   const body = (await getArticleBody(decodedUrl)) || buildFallbackBriefBody(item, allItems);
+  const paddingSource = stripLeadingTitleNoise(normalizeSummaryText(body), item.title);
 
   const aiSummary = await summarizeWithGemini(item.title, body, GADGET_BRIEF_MIN, GADGET_BRIEF_MAX);
   let summary = aiSummary || extractiveSummary(item.title, body, GADGET_BRIEF_MIN, GADGET_BRIEF_MAX);
-  summary = enforceTextLength(summary, body, GADGET_BRIEF_MIN, GADGET_BRIEF_MAX);
+  summary = cleanupBriefNoise(summary, item.title, item.source || '');
+  summary = enforceTextLength(summary, paddingSource, GADGET_BRIEF_MIN, GADGET_BRIEF_MAX);
+  summary = cleanupBriefNoise(summary, item.title, item.source || '');
+  summary = enforceTextLength(summary, paddingSource, GADGET_BRIEF_MIN, GADGET_BRIEF_MAX);
+  summary = cleanupBriefNoise(summary, item.title, item.source || '');
 
   if (isLikelyCorruptedText(summary)) {
     summary = extractiveSummary(item.title, buildFallbackBriefBody(item, allItems), GADGET_BRIEF_MIN, GADGET_BRIEF_MAX);
+    summary = cleanupBriefNoise(summary, item.title, item.source || '');
+    summary = enforceTextLength(summary, paddingSource, GADGET_BRIEF_MIN, GADGET_BRIEF_MAX);
+    summary = cleanupBriefNoise(summary, item.title, item.source || '');
   }
 
   return {

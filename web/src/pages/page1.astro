@@ -23,8 +23,6 @@ const now = dayjs();
           {
             weather.days.map((day) => {
               const humidityValue = Math.max(0, Math.min(100, Number(day.humidity) || 0));
-              const tempSpread = Math.max(0, (Number(day.maxTemp) || 0) - (Number(day.minTemp) || 0));
-              const spreadLevel = Math.min(100, Math.max(10, tempSpread * 11));
               const humidityLevel = Math.max(10, humidityValue);
 
               return (
@@ -52,11 +50,17 @@ const now = dayjs();
                         <span class="meter-fill" style={`width:${humidityLevel}%`}></span>
                       </span>
                     </div>
-                    <div class="hud-meter">
-                      <span class="meter-label">RNG</span>
-                      <span class="meter-track">
-                        <span class="meter-fill temp-fill" style={`width:${spreadLevel}%`}></span>
-                      </span>
+                    <div class="sun-grid">
+                      <div class="sun-row">
+                        <span class="sun-icon">☀</span>
+                        <span class="sun-label">SUNRISE</span>
+                        <span class="sun-time">{day.sunrise}</span>
+                      </div>
+                      <div class="sun-row">
+                        <span class="sun-icon">☾</span>
+                        <span class="sun-label">SUNSET</span>
+                        <span class="sun-time">{day.sunset}</span>
+                      </div>
                     </div>
                     <div class="hud-scan">
                       <span>◢</span>
@@ -271,12 +275,6 @@ const now = dayjs();
       repeating-linear-gradient(90deg, rgba(0, 255, 0, 0.9) 0 2px, rgba(0, 255, 0, 0.2) 2px 4px);
   }
 
-  .temp-fill {
-    background:
-      linear-gradient(90deg, rgba(0, 0, 255, 0.85), rgba(0, 0, 255, 0.35)),
-      repeating-linear-gradient(90deg, rgba(0, 0, 255, 0.9) 0 2px, rgba(0, 0, 255, 0.18) 2px 4px);
-  }
-
   .hud-scan {
     margin-top: 1px;
     border-top: 1px solid rgba(0, 0, 255, 0.35);
@@ -287,6 +285,42 @@ const now = dayjs();
     display: flex;
     justify-content: space-between;
     letter-spacing: 0.4px;
+  }
+
+  .sun-grid {
+    display: grid;
+    grid-template-rows: repeat(2, 1fr);
+    row-gap: 2px;
+    margin-top: 1px;
+  }
+
+  .sun-row {
+    display: grid;
+    grid-template-columns: 12px 1fr auto;
+    align-items: center;
+    column-gap: 4px;
+    min-height: 10px;
+  }
+
+  .sun-icon {
+    color: var(--warn);
+    font-size: 10px;
+    line-height: 10px;
+  }
+
+  .sun-label {
+    color: var(--line);
+    font-size: 9px;
+    line-height: 10px;
+    font-weight: 800;
+    letter-spacing: 0.3px;
+  }
+
+  .sun-time {
+    color: var(--text);
+    font-size: 10px;
+    line-height: 10px;
+    font-weight: 700;
   }
 
   .headline-list {

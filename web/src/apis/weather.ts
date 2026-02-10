@@ -26,6 +26,11 @@ export interface OwmForecastEntry {
 export interface OwmForecastResponse {
   cod: string;
   list: OwmForecastEntry[];
+  city?: {
+    sunrise?: number;
+    sunset?: number;
+    timezone?: number;
+  };
 }
 
 export const fetchWeather = async (): Promise<OwmForecastResponse> => {

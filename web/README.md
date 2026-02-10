@@ -37,7 +37,7 @@ npm run dev
 RSS 变量说明：
 - `GENERAL_NEWS_RSS_URL`：Page1 综合重点头条（默认 Google News 综合头条）
 - `GADGET_NEWS_RSS_URL`：Page2 数码/Gadget 头条（默认 Gadget 搜索 RSS）
-- `GOOGLE_NEWS_RSS_URL`：兼容旧配置，未设置上面两个变量时回退使用
+- `GOOGLE_NEWS_RSS_URL`：兼容旧配置，仅在未设置 `GADGET_NEWS_RSS_URL` 时用于 Page2
 
 ## 3) 生成 3 页截图和 BMP
 

@@ -369,7 +369,7 @@ const parseNewsItems = async (feedUrl: string, fallback: NewsItem[]): Promise<Ne
 };
 
 const resolveGeneralRssUrl = (): string => {
-  return import.meta.env.GENERAL_NEWS_RSS_URL || import.meta.env.GOOGLE_NEWS_RSS_URL || DEFAULT_GENERAL_NEWS_RSS;
+  return import.meta.env.GENERAL_NEWS_RSS_URL || DEFAULT_GENERAL_NEWS_RSS;
 };
 
 const resolveGadgetRssUrl = (): string => {
@@ -610,8 +610,7 @@ const buildGadgetBrief = async (item: NewsItem, allItems: NewsItem[]): Promise<G
 
 export const getGoogleHeadlines = async (): Promise<NewsData> => {
   const items = await parseNewsItems(resolveGeneralRssUrl(), fallbackGeneralItems());
-  const ranked = [...items].sort((a, b) => scoreGeneralHeadline(b) - scoreGeneralHeadline(a));
-  const headlines = ranked.slice(0, 8);
+  const headlines = items.slice(0, 8);
 
   if (!headlines.length) {
     return { headlines: fallbackGeneralItems() };

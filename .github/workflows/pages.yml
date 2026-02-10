@@ -86,10 +86,10 @@ jobs:
             magick ./dist/${p}.png \
               -colorspace sRGB \
               -strip \
-              -contrast-stretch 0.2%x0.2% \
-              -sharpen 0x1.1 \
-              -ordered-dither o8x8,7 \
+              -alpha off \
+              +dither \
               -remap palette.png \
+              -define bmp:format=bmp3 \
               -type truecolor \
               ./dist/${p}.bmp
           done
@@ -97,8 +97,7 @@ jobs:
           magick ./dist/page3.png \
             -colorspace sRGB \
             -strip \
-            -gamma 0.95 \
-            -modulate 104,106,100 \
+            -alpha off \
             -define bmp:format=bmp3 \
             -type truecolor \
             ./dist/page3.bmp

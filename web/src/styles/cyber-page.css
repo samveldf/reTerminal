@@ -1,12 +1,11 @@
 :root {
-  --bg: #f7fbff;
+  --bg: #ffffff;
   --panel: #ffffff;
-  --line: #00aac7;
-  --accent: #0e9e5d;
-  --warn: #f14678;
-  --text: #102233;
-  --muted: #3a5f75;
-  --grid: rgba(8, 162, 209, 0.08);
+  --line: #0000ff;
+  --accent: #00ff00;
+  --warn: #ff0000;
+  --text: #000000;
+  --muted: #0000ff;
 }
 
 * {
@@ -27,12 +26,7 @@ body {
   height: 480px;
   padding: 8px;
   color: var(--text);
-  background:
-    linear-gradient(90deg, var(--grid) 1px, transparent 1px) 0 0 / 24px 24px,
-    linear-gradient(0deg, var(--grid) 1px, transparent 1px) 0 0 / 24px 24px,
-    radial-gradient(circle at 0 100%, rgba(241, 70, 120, 0.12), transparent 30%),
-    radial-gradient(circle at 100% 0, rgba(0, 170, 199, 0.12), transparent 32%),
-    var(--bg);
+  background: var(--bg);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -41,9 +35,7 @@ body {
 .cyber-header {
   height: 50px;
   border: 2px solid var(--line);
-  background:
-    linear-gradient(90deg, rgba(0, 170, 199, 0.16), rgba(255, 255, 255, 0) 55%),
-    var(--panel);
+  background: var(--panel);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -51,7 +43,7 @@ body {
 }
 
 .header-title {
-  color: #0094b4;
+  color: var(--line);
   font-size: 29px;
   font-weight: 800;
   letter-spacing: 0.6px;
@@ -67,7 +59,7 @@ body {
 
 .panel {
   border: 2px solid var(--line);
-  background: rgba(255, 255, 255, 0.96);
+  background: var(--panel);
   padding: 6px;
   overflow: hidden;
 }

@@ -12,9 +12,7 @@ body {
   height: 480px;
   overflow: hidden;
   font-family: 'Noto Sans SC', 'Noto Sans JP Variable', sans-serif;
-  background: #f7fbff;
-  color: #102233;
-  text-rendering: geometricPrecision;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  background: #ffffff;
+  color: #000000;
+  text-rendering: optimizeLegibility;
 }

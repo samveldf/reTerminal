@@ -1,16 +1,16 @@
-CI/CDや何かしらのデータを生成するときに使われるスクリプトを配置している場所です
+This directory contains scripts used for CI/CD and data/artifact generation.
 
-## 目的
+## Purpose
 
-- CI/CD パイプラインの前後処理（lint、ビルド、デプロイなど）や成果物の生成を担うスクリプトをまとめて管理します。
-- 再現性のあるデータ生成や fixture 作成など、プロジェクト全体で再利用される補助ツール群を集約します。
+- Centralize scripts that handle pre/post CI steps (lint, build, deploy) and artifact generation.
+- Collect reusable helper tools for reproducible data generation and fixture creation across the project.
 
-## コントリビュート時の注意
+## Contribution Notes
 
-- スクリプトは冪等性を意識し、入力と出力を README に記述するかコメントで残してください。
-- 秘密情報のハードコードは禁止し、CI のシークレットや `.env` 経由で受け取るようにしてください。
+- Keep scripts idempotent. Document inputs/outputs in README files or leave clear comments.
+- Do not hard-code secrets. Read them from CI secrets or `.env`.
 
-## 保守
+## Maintenance
 
-- スクリプトを変更したら手元で必ず実行確認し、CI が正常に通過することを確認してください。
-- 新しい用途やディレクトリを追加したらこの README も更新し、意図と使い方を明文化してください。
+- After modifying a script, run it locally and ensure CI passes.
+- If you add new use cases or directories, update this README with purpose and usage.

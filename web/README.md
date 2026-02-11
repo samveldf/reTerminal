@@ -1,29 +1,29 @@
 # Web-only Multi-page Cyber Dashboard (for SenseCraft)
 
-你现在这套是纯 `web` 方案，不用 `arduino/`。
+This setup is purely `web`-based and does not use `arduino/`.
 
-实现原理与架构图（外行版 + 技术版）见根目录：
+Architecture and implementation details (plain + technical) are in:
 - `README.md`
 
-生成结果：
-- `page1.bmp`：天气 + 室内温湿度 + 电量
-- `page2.bmp`：3 条重点 Gadget 新闻摘要（每条约 100 字）
-- `page3.bmp`：`./DSC_2962.jpg` 图片页
+Generated outputs:
+- `page1.bmp`: weather + indoor temp/humidity + battery
+- `page2.bmp`: 3 key gadget news briefs (about 100 chars each)
+- `page3.bmp`: image page from `./DSC_2962.jpg`
 
-## 1) `.env` 已配置
+## 1) `.env` Is Configured
 
-`web/.env` 已写入：
+`web/.env` already includes:
 - OpenWeather API Key
-- 东京坐标
-- Tokyo 天气
-- 综合重点新闻 RSS（Page1）
-- Gadget 新闻 RSS（Page2）
+- Tokyo coordinates
+- Tokyo weather label
+- General top-news RSS (Page1)
+- Gadget news RSS (Page2)
 - `FEATURE_IMAGE_URL=/DSC_2962.jpg`
-- `INDOOR_TEMP_C / INDOOR_HUMIDITY / DEVICE_BATTERY_PERCENT`（当前为页面展示值）
+- `INDOOR_TEMP_C / INDOOR_HUMIDITY / DEVICE_BATTERY_PERCENT` (currently display values)
 
-如果要改，编辑 `web/.env`。
+Edit `web/.env` if you want to change them.
 
-## 2) 本地开发
+## 2) Local Development
 
 ```bash
 cd web
@@ -31,18 +31,18 @@ npm install
 npm run dev
 ```
 
-页面：
+Pages:
 - `http://localhost:3000/page1`
 - `http://localhost:3000/page2`
 - `http://localhost:3000/page3`
-- `http://localhost:3000/`（自动轮播）
+- `http://localhost:3000/` (auto-rotation)
 
-RSS 变量说明：
-- `GENERAL_NEWS_RSS_URL`：Page1 综合重点头条（默认 Google News 综合头条）
-- `GADGET_NEWS_RSS_URL`：Page2 数码/Gadget 头条（默认 Gadget 搜索 RSS）
-- `GOOGLE_NEWS_RSS_URL`：兼容旧配置，仅在未设置 `GADGET_NEWS_RSS_URL` 时用于 Page2
+RSS env variables:
+- `GENERAL_NEWS_RSS_URL`: general top headlines for Page1 (default: Google News general feed)
+- `GADGET_NEWS_RSS_URL`: gadget/digital feed for Page2 (default: gadget search feed)
+- `GOOGLE_NEWS_RSS_URL`: legacy compatibility; used for Page2 only when `GADGET_NEWS_RSS_URL` is unset
 
-## 3) 生成 3 页截图和 BMP
+## 3) Generate 3 Screenshots and BMPs
 
 ```bash
 cd web
@@ -64,7 +64,7 @@ for p in page1 page2; do
     ./dist/${p}.bmp
 done
 
-# page3 保色优先（不要 remap 到 7 色盘）
+# Preserve color on page3 (do not remap to the 7-color palette)
 magick ./dist/page3.png \
   -colorspace sRGB \
   -strip \
@@ -74,15 +74,16 @@ magick ./dist/page3.png \
   ./dist/page3.bmp
 ```
 
-## 4) 用 SenseCraft 实现多页循环
+## 4) Configure Multi-page Rotation in SenseCraft
 
-推荐用 Gallery（最稳）：
-1. 在 SenseCraft 新建 `Gallery` 页面。
-2. 添加 3 张网络图片：
+Recommended approach: use `Gallery` (most stable).
+1. Create a new `Gallery` page in SenseCraft.
+2. Add 3 image URLs:
    - `https://<your-user>.github.io/<your-repo>/page1.bmp`
    - `https://<your-user>.github.io/<your-repo>/page2.bmp`
    - `https://<your-user>.github.io/<your-repo>/page3.bmp`
-3. 设置轮播间隔（例如 20~60 秒）。
-4. Deploy 到 E1002。
+3. Set rotation interval (for example, 20-60 seconds).
+4. Deploy to E1002.
 
-这样就是你要的“1页天气+综合重点头条、1页3条数码摘要、1页图片”的循环显示。
+This gives the desired cycle:
+1 page weather + top news, 1 page gadget briefs, 1 page image.

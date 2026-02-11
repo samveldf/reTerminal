@@ -1,24 +1,26 @@
-# スクリーンショット生成スクリプト
+# Screenshot Generation Script
 
-このディレクトリには、ローカルでホストされている Web アプリケーションのスクリーンショットを Playwright で取得するスクリプトが含まれています。CI/CD パイプラインやリリース用の画像の生成に利用します。
+This directory contains a Playwright script that captures screenshots of a locally hosted web app. It is used in CI/CD and release image generation.
 
-## 使い方
+## Usage
 
-1. `npm run dev` などで対象アプリを `localhost:3000` に起動しておく（`PORT` を変更した場合は `index.ts` と README を合わせて更新）。
-2. プロジェクトのルートにて `npm run screenshot` で実行してスクリーンショットを作成します。
+1. Start the target app on `localhost:3000` (for example with `npm run dev`).
+   If you change `PORT`, update both `index.ts` and this README.
+2. Run `npm run screenshot` from the project root.
 
-## 前提条件
+## Prerequisites
 
-- Node.js 24+ および依存パッケージ（`playwright` など）がインストール済みであること。
-- ブラウザ起動に必要なランタイム（Playwright の Chromium）がセットアップ済みであること（`npx playwright install` を初回に実行）。
+- Node.js 24+ and dependencies (including `playwright`) are installed.
+- Playwright Chromium runtime is installed (`npx playwright install` on first setup).
 
-## パラメータのカスタマイズ
+## Customizable Parameters
 
-- `PORT`: 対象アプリのサーバーポート（デフォルト 3000）。
-- `OUTPUT_FILE`: 出力ファイル名（デフォルト `screenshot.png`）。
-- `URL`: スクリーンショットを取りたい完全な URL（必要に応じてホストやパスを調整）。
-- `WIDTH` / `HEIGHT`: ブラウザのビューポートサイズ。必要なレイアウトやアセットが確実に収まるように調整してください。
+- `PORT`: app server port (default: `3000`)
+- `OUTPUT_FILE`: output file name (default: `screenshot.png`)
+- `URL`: full URL to capture (adjust host/path as needed)
+- `WIDTH` / `HEIGHT`: browser viewport size for your target layout
 
-## トラブルシューティング
+## Troubleshooting
 
-- `browserType.launch: Executable doesn't exist at /Users/kana/Library/Caches/ms-playwright/chromium_headless_shell-1200/chrome-headless-shell-mac-arm64/chrome-headless-shell` のようなエラーが出た場合、`npx playwright install` を再実行してブラウザバイナリを再インストールしてください。
+- If you see an error like `browserType.launch: Executable doesn't exist ...`,
+  run `npx playwright install` again to reinstall browser binaries.

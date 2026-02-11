@@ -1,39 +1,39 @@
 # reTerminal E1002 Web-only Multi-page Dashboard
 
-这是一个给 reTerminal E1002 用的纯 `web` 方案，不需要 `arduino/`。  
-核心思路是：不在设备上做重计算，而是在 GitHub 上定时生成 3 张最新页面（最终是 BMP），设备只负责显示。
+This is a pure `web` solution for reTerminal E1002 and does not require `arduino/`.  
+The core idea is: do not run heavy logic on-device. Instead, generate 3 up-to-date pages (BMP outputs) on GitHub at intervals, and let the device focus on display only.
 
-## 1) 外行版：这个项目到底做了什么
+## 1) Plain-English Overview
 
-- `Page1`：东京天气（今天+未来3天）+ 全局重点新闻标题
-- `Page2`：3 条重点 Gadget 新闻简报（自动摘要、自动去噪、自动去重）
-- `Page3`：全屏图片（默认 `./DSC_2962.jpg`）
-- 页面会自动轮播，适合 ePaper 看板场景
+- `Page1`: Tokyo weather (today + next 3 days) + top general headlines
+- `Page2`: 3 key gadget news briefs (auto-summary, auto-noise cleanup, auto-deduplication)
+- `Page3`: full-screen image (default `./DSC_2962.jpg`)
+- Pages auto-rotate, suitable for ePaper dashboard scenarios
 
-## 2) 一张图看懂整体架构
+## 2) Architecture at a Glance
 
 ```mermaid
 flowchart LR
-    subgraph A[数据源]
+    subgraph A[Data Sources]
       A1[OpenWeather API]
-      A2[综合新闻 RSS]
+      A2[General News RSS]
       A3[Gadget RSS]
-      A4[可选 Gemini API]
+      A4[Optional Gemini API]
     end
 
-    subgraph B[网页生成层]
-      B1[weatherService<br/>天气聚合]
-      B2[newsService<br/>清洗/摘要/去重]
-      B3[Astro 页面渲染<br/>page1 page2 page3]
+    subgraph B[Web Generation Layer]
+      B1[weatherService<br/>Weather Aggregation]
+      B2[newsService<br/>Cleanup Summary Dedup]
+      B3[Astro Page Rendering<br/>page1 page2 page3]
     end
 
-    subgraph C[发布流水线]
-      C1[Playwright 截图 PNG]
-      C2[ImageMagick 转 BMP]
-      C3[GitHub Pages 发布]
+    subgraph C[Publish Pipeline]
+      C1[Playwright PNG Capture]
+      C2[ImageMagick BMP Conversion]
+      C3[GitHub Pages Deployment]
     end
 
-    subgraph D[设备显示层]
+    subgraph D[Device Display Layer]
       D1[SenseCraft Gallery]
       D2[reTerminal E1002]
     end
@@ -41,97 +41,97 @@ flowchart LR
     A1 --> B1
     A2 --> B2
     A3 --> B2
-    A4 -.可选.-> B2
+    A4 -.optional.-> B2
     B1 --> B3
     B2 --> B3
     B3 --> C1 --> C2 --> C3 --> D1 --> D2
 ```
 
-## 3) 实现原理（深入浅出）
+## 3) How It Works
 
-### 3.1 数据怎么来
+### 3.1 Data Input
 
-- 天气：调用 OpenWeather 的 5-day/3-hour 预报接口（免费可用），再聚合成“天级别”信息
-- 新闻：从 RSS 拉取 XML，解析出标题、时间、来源、链接、简介
-- 摘要：优先使用 Gemini（若配置了 key），否则自动切换为本地抽取式摘要
+- Weather: uses OpenWeather 5-day/3-hour forecast (free endpoint), then aggregates to day-level data
+- News: fetches RSS XML and parses title/time/source/link/description
+- Summaries: uses Gemini first (if key is configured), otherwise falls back to local extractive summarization
 
-对应代码：
+Code references:
 - `web/src/apis/weather.ts`
 - `web/src/apis/news.ts`
 - `web/src/services/weatherService.ts`
 - `web/src/services/newsService.ts`
 
-### 3.2 新闻为什么现在更干净
+### 3.2 Why News Output Looks Cleaner
 
-`newsService` 里做了多层处理，避免“乱码、噪声、重复、截断”：
+`newsService` applies multiple passes to avoid garbled text, noise, duplicates, and truncation:
 
-- 去噪：清除 `javascript:`、时间戳、作者/编辑/来源等非正文信息
-- 去回声：去掉标题与正文的重复段、重复句
-- 去重：同一轮候选新闻做近似去重（标题签名、关键词、设备名）
-- 跨刷新去重：用历史缓存优先选择“上一轮没出现过”的新闻
-- 长度控制：摘要字数收敛到可读区间，避免太短/太长
+- Noise removal: strips `javascript:`, timestamps, byline/editor/source fragments, and similar clutter
+- Echo removal: removes title/body repeated phrases and duplicate sentences
+- In-batch deduplication: near-duplicate filtering by title signature, keywords, and device/entity cues
+- Cross-refresh deduplication: uses a history cache to prioritize items not shown in the previous cycle
+- Length control: enforces readable summary length bounds to avoid too short/too long output
 
-对应代码：
+Code reference:
 - `web/src/services/newsService.ts`
 
-### 3.3 页面为什么能适配 ePaper
+### 3.3 Why It Fits ePaper
 
-- 画布固定 `800x480`，字体、边框、色彩按 ePaper 可读性设计
-- Page2 的标题和摘要使用自适应字体策略，尽量避免显示不完整
-- Page3 图片单独走保色策略（truecolor BMP），避免过暗和失真
+- Fixed canvas at `800x480` with typography/border/color tuned for ePaper readability
+- Page2 title/summary use adaptive font sizing to reduce clipping
+- Page3 uses a separate color-preserving path (truecolor BMP) to avoid darkening and detail loss
 
-对应代码：
+Code references:
 - `web/src/styles/global.css`
 - `web/src/styles/cyber-page.css`
 - `web/src/pages/page1.astro`
 - `web/src/pages/page2.astro`
 - `web/src/pages/page3.astro`
 
-### 3.4 轮播是怎么实现的
+### 3.4 Auto Rotation Logic
 
-- `/` 页面只放一个 `iframe`
-- 通过 `?p=1/2/3` 控制当前页
-- 到时间后自动跳到下一页，形成循环
+- `/` renders a single `iframe`
+- `?p=1/2/3` controls the active page
+- A timer advances to the next page, forming a loop
 
-对应代码：
+Code reference:
 - `web/src/pages/index.astro`
 
-## 4) 自动更新与部署机制
+## 4) Auto Update and Deployment
 
-- 触发方式：
-  - `push main` 立即构建
-  - 手动触发 workflow
-  - 定时任务每 30 分钟一次
-- CI 流程：
-  - `astro build` 生成静态页
-  - Playwright 截图 `page1/2/3.png`
-  - ImageMagick 转 `page1/2/3.bmp`
-  - 发布到 GitHub Pages
+- Triggers:
+  - `push main`: immediate build
+  - manual workflow dispatch
+  - scheduled run every 30 minutes
+- CI flow:
+  - `astro build` generates static pages
+  - Playwright captures `page1/2/3.png`
+  - ImageMagick converts to `page1/2/3.bmp`
+  - artifacts are deployed to GitHub Pages
 
-对应代码：
+Code references:
 - `.github/workflows/pages.yml`
 - `web/scripts/screenshot/index.ts`
 
-## 5) 输出结果与设备接入
+## 5) Outputs and Device Integration
 
-发布后可直接访问：
+After deployment, access:
 
 - `https://<your-user>.github.io/<your-repo>/page1.bmp`
 - `https://<your-user>.github.io/<your-repo>/page2.bmp`
 - `https://<your-user>.github.io/<your-repo>/page3.bmp`
 
-在 SenseCraft 里推荐用 `Gallery` 组件，填入这 3 个 URL 做轮播显示。
+In SenseCraft, the recommended approach is the `Gallery` component with these 3 URLs for rotation.
 
-## 6) 关键目录速览
+## 6) Key Directories
 
-- `web/src/pages`：3 个页面 + 轮播入口页
-- `web/src/services`：天气聚合、新闻清洗/摘要/去重核心逻辑
-- `web/src/apis`：外部接口请求封装
-- `web/scripts/screenshot`：自动截图脚本
-- `.github/workflows/pages.yml`：自动构建发布流水线
+- `web/src/pages`: 3 pages + rotation entry page
+- `web/src/services`: weather aggregation + news cleanup/summary/dedup core logic
+- `web/src/apis`: external API wrappers
+- `web/scripts/screenshot`: screenshot automation script
+- `.github/workflows/pages.yml`: build and deployment pipeline
 
-## 7) 运行与配置
+## 7) Run and Configure
 
-具体开发和命令说明见：
+For detailed commands and local setup:
 
 - `web/README.md`

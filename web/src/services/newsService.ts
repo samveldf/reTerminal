@@ -1,3 +1,5 @@
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
 import { XMLParser } from 'fast-xml-parser';
 import { Readability } from '@mozilla/readability';
 import { JSDOM } from 'jsdom';
@@ -35,11 +37,19 @@ export interface GadgetBriefData {
 const GOOGLE_NEWS_HOST = 'news.google.com';
 const GADGET_BRIEF_MIN = 160;
 const GADGET_BRIEF_MAX = 195;
+const BRIEF_HISTORY_MAX_ENTRIES = 240;
+const DEFAULT_BRIEF_HISTORY_HOURS = 12;
+const BRIEF_HISTORY_FILE = import.meta.env.GADGET_BRIEF_HISTORY_FILE || '.cache/gadget-brief-history.json';
 const decoder = new GoogleDecoder();
 const MEDIA_PREFIX_PATTERN =
   '(?:新浪(?:科技|数码)?|网易(?:科技|新闻)?|腾讯(?:科技|新闻)?|凤凰(?:网科技|新闻)?|搜狐(?:科技|新闻)?|快科技|IT之家|观察者网|澎湃新闻|封面新闻|第一财经|财联社|新华社|人民日报|中新经纬|界面新闻|C114通信网|爱范儿|36氪)';
 const CHINESE_SURNAME_CHARS =
   '赵钱孙李周吴郑王冯陈褚卫蒋沈韩杨朱秦尤许何吕施张孔曹严华金魏陶姜戚谢邹喻柏水窦章云苏潘葛范彭郎鲁韦昌马苗凤花方俞任袁柳鲍史唐费廉岑薛雷贺倪汤滕殷罗毕郝安常乐于时傅皮卞齐康伍余元卜顾孟平黄和穆萧尹姚邵湛汪祁毛禹狄米贝明臧计伏成戴谈宋茅庞熊纪舒屈项祝董梁杜阮蓝闵席季麻强贾路娄危江童颜郭梅盛林刁钟徐邱骆高夏蔡田樊胡凌霍虞万支柯昝管卢莫经房裘缪干解应宗丁宣贲邓郁单杭洪包诸左石崔吉钮龚程嵇邢滑裴陆荣翁荀羊於惠甄曲家封芮羿储靳汲邴糜松井段富巫乌焦巴弓牧隗山谷车侯宓蓬全郗班仰秋仲伊宫宁仇栾暴甘斜厉戎祖武符刘景詹束龙叶幸司韶郜黎蓟薄印宿白怀蒲邰从鄂索咸籍赖卓蔺屠蒙池乔阴胥能苍双闻莘党翟谭贡劳逄姬申扶堵冉宰郦雍却璩桑桂濮牛寿通边扈燕冀郏浦尚农温别庄晏柴瞿阎充慕连茹习宦艾鱼容向古易慎戈廖庾终暨居衡步都耿满弘匡国文寇广禄阙东欧殳沃利蔚越夔隆师巩厍聂晁勾敖融冷訾辛阚那简饶空曾毋沙乜养鞠须丰巢关蒯相查后荆红游竺权逯盖益桓公';
+
+interface BriefHistoryEntry {
+  signature: string;
+  ts: number;
+}
 
 const stripBrokenChars = (input: string): string => {
   return input
@@ -605,18 +615,129 @@ const fallbackGadgetItems = (): NewsItem[] => [
   },
 ];
 
-const dedupeByTitle = (items: NewsItem[]): NewsItem[] => {
-  const seen = new Set<string>();
-  return items.filter((item) => {
-    const key = item.title.toLowerCase();
-    if (!key || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-};
-
 const normalizeComparable = (input: string): string => {
   return input.toLowerCase().replace(/[\s\-_.,，。:：;；!！?？'"“”‘’`~()[\]{}<>|/\\]/g, '');
+};
+
+const TITLE_NOISE_WORDS = [
+  '最新',
+  '快讯',
+  '要闻',
+  '头条',
+  '观察者网',
+  '新浪科技',
+  '新浪数码',
+  '新浪网',
+  '澎湃新闻',
+  '中新网',
+  '央视新闻',
+  '人民网',
+  '新华社',
+  '腾讯新闻',
+  '网易新闻',
+  'it之家',
+  '科技',
+  '数码',
+];
+
+const normalizeTitleSignature = (title: string): string => {
+  let text = cleanTitle(title).toLowerCase();
+  text = text.replace(/[【】\[\]()（）{}<>《》]/g, ' ');
+  for (const word of TITLE_NOISE_WORDS) {
+    text = text.replace(new RegExp(escapeRegExp(word), 'gi'), ' ');
+  }
+  text = text.replace(/\s+/g, ' ').trim();
+  return normalizeComparable(text).replace(/(报道|消息|首发|评测|体验)$/g, '');
+};
+
+const parsePositiveInt = (value: string | undefined, fallback: number): number => {
+  if (!value) return fallback;
+  const n = Number.parseInt(value, 10);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return n;
+};
+
+const briefHistoryHours = (): number => {
+  return parsePositiveInt(import.meta.env.GADGET_BRIEF_HISTORY_HOURS, DEFAULT_BRIEF_HISTORY_HOURS);
+};
+
+const briefHistoryPath = (): string => {
+  return resolve(process.cwd(), BRIEF_HISTORY_FILE);
+};
+
+const pruneBriefHistory = (entries: BriefHistoryEntry[]): BriefHistoryEntry[] => {
+  const now = Date.now();
+  const ttlMs = briefHistoryHours() * 3_600_000;
+  const cutoff = now - ttlMs;
+  const latestBySignature = new Map<string, number>();
+
+  for (const entry of entries) {
+    if (!entry.signature || !Number.isFinite(entry.ts)) continue;
+    if (entry.ts < cutoff) continue;
+    const current = latestBySignature.get(entry.signature);
+    if (!current || entry.ts > current) {
+      latestBySignature.set(entry.signature, entry.ts);
+    }
+  }
+
+  return [...latestBySignature.entries()]
+    .map(([signature, ts]) => ({ signature, ts }))
+    .sort((a, b) => b.ts - a.ts)
+    .slice(0, BRIEF_HISTORY_MAX_ENTRIES);
+};
+
+const loadBriefHistory = async (): Promise<BriefHistoryEntry[]> => {
+  try {
+    const file = briefHistoryPath();
+    const text = await readFile(file, 'utf-8');
+    const parsed = JSON.parse(text) as { entries?: BriefHistoryEntry[] } | BriefHistoryEntry[];
+    const entries = Array.isArray(parsed) ? parsed : parsed.entries || [];
+    return pruneBriefHistory(entries);
+  } catch {
+    return [];
+  }
+};
+
+const saveBriefHistory = async (entries: BriefHistoryEntry[]): Promise<void> => {
+  try {
+    const file = briefHistoryPath();
+    const pruned = pruneBriefHistory(entries);
+    await mkdir(dirname(file), { recursive: true });
+    await writeFile(
+      file,
+      JSON.stringify(
+        {
+          updatedAt: new Date().toISOString(),
+          ttlHours: briefHistoryHours(),
+          entries: pruned,
+        },
+        null,
+        2,
+      ),
+      'utf-8',
+    );
+  } catch (error) {
+    console.error('brief history save error:', error);
+  }
+};
+
+const keywordTokens = (input: string): Set<string> => {
+  const tokens = new Set<string>();
+  const text = normalizeComparable(input);
+
+  for (const token of text.match(/[a-z]+[0-9]+[a-z0-9]{0,10}|[a-z]{4,16}/g) || []) {
+    tokens.add(token);
+  }
+
+  const cjk = (text.match(/[\u4e00-\u9fff]/g) || []).join('');
+  for (let i = 0; i <= cjk.length - 2; i += 1) {
+    const token = cjk.slice(i, i + 2);
+    if (!/^(最新|要闻|消息|报道|发布|视频|手机|新闻|科技|数码|产品|体验|评测)$/.test(token)) {
+      tokens.add(token);
+    }
+  }
+
+  return tokens;
 };
 
 const buildSimilarityTokensFromText = (text: string): Set<string> => {
@@ -675,6 +796,44 @@ const jaccard = (a: Set<string>, b: Set<string>): number => {
   return union > 0 ? inter / union : 0;
 };
 
+const dedupeNewsItems = (items: NewsItem[]): NewsItem[] => {
+  const accepted: Array<{
+    signature: string;
+    titleTokens: Set<string>;
+    urlKey: string;
+  }> = [];
+
+  return items.filter((item) => {
+    const signature = normalizeTitleSignature(item.title);
+    if (!signature) return false;
+
+    let urlKey = '';
+    try {
+      const url = new URL(item.url);
+      urlKey = `${url.hostname}${url.pathname}`.toLowerCase();
+    } catch {
+      urlKey = item.url.toLowerCase();
+    }
+
+    const titleTokens = keywordTokens(item.title);
+    const duplicated = accepted.some((existing) => {
+      if (existing.urlKey && urlKey && existing.urlKey === urlKey) return true;
+      if (existing.signature === signature) return true;
+
+      const minLen = Math.min(existing.signature.length, signature.length);
+      if (minLen >= 10 && (existing.signature.includes(signature) || signature.includes(existing.signature))) {
+        return true;
+      }
+
+      return jaccard(existing.titleTokens, titleTokens) >= 0.62;
+    });
+
+    if (duplicated) return false;
+    accepted.push({ signature, titleTokens, urlKey });
+    return true;
+  });
+};
+
 const isHighlySimilar = (
   candidate: NewsItem,
   selected: NewsItem,
@@ -697,7 +856,10 @@ const isHighlySimilar = (
     return true;
   }
 
-  return jaccard(candidateTokens, selectedTokens) >= 0.5;
+  const keywordOverlap = jaccard(keywordTokens(candidate.title), keywordTokens(selected.title));
+  if (keywordOverlap >= 0.58) return true;
+
+  return jaccard(candidateTokens, selectedTokens) >= 0.42;
 };
 
 const selectDiverseGadgetItems = (rankedItems: NewsItem[], count: number): NewsItem[] => {
@@ -765,13 +927,16 @@ const isBriefHighlySimilar = (candidate: GadgetBrief, selected: GadgetBrief): bo
     buildSimilarityTokensFromText(candidate.title),
     buildSimilarityTokensFromText(selected.title),
   );
-  if (titleSimilarity >= 0.32) return true;
+  if (titleSimilarity >= 0.26) return true;
+
+  const titleKeywordSimilarity = jaccard(keywordTokens(candidate.title), keywordTokens(selected.title));
+  if (titleKeywordSimilarity >= 0.55) return true;
 
   const bodySimilarity = jaccard(
     buildSimilarityTokensFromText(candidateText),
     buildSimilarityTokensFromText(selectedText),
   );
-  return bodySimilarity >= 0.34;
+  return bodySimilarity >= 0.3;
 };
 
 const parseNewsItems = async (feedUrl: string, fallback: NewsItem[]): Promise<NewsItem[]> => {
@@ -802,7 +967,7 @@ const parseNewsItems = async (feedUrl: string, fallback: NewsItem[]): Promise<Ne
     )
     .filter((item) => !!item.title && !item.title.includes('N/A'));
 
-  return dedupeByTitle(items);
+  return dedupeNewsItems(items);
 };
 
 const resolveGeneralRssUrl = (): string => {
@@ -1072,7 +1237,15 @@ export const getGadgetBriefs = async (): Promise<GadgetBriefData> => {
     return { briefs: [toFallbackBrief(0), toFallbackBrief(1), toFallbackBrief(2)] };
   }
 
+  const historyEntries = await loadBriefHistory();
+  const recentSignatures = new Set(historyEntries.map((entry) => entry.signature));
+  const isRecentItem = (item: NewsItem): boolean => recentSignatures.has(normalizeTitleSignature(item.title));
+
   const candidatePool = ranked.slice(0, 10);
+  const freshPool = candidatePool.filter((item) => !isRecentItem(item));
+  const repeatedPool = candidatePool.filter((item) => isRecentItem(item));
+  const orderedPool = [...freshPool, ...repeatedPool];
+
   const cache = new Map<string, GadgetBrief>();
   const getCacheKey = (item: NewsItem) => `${item.title}|${item.url}`;
   const getOrBuildBrief = async (item: NewsItem): Promise<GadgetBrief> => {
@@ -1085,7 +1258,7 @@ export const getGadgetBriefs = async (): Promise<GadgetBriefData> => {
   };
 
   const briefs: GadgetBrief[] = [];
-  const preSelected = selectDiverseGadgetItems(candidatePool, Math.min(8, candidatePool.length));
+  const preSelected = selectDiverseGadgetItems(orderedPool, Math.min(8, orderedPool.length));
   for (const item of preSelected) {
     const brief = await getOrBuildBrief(item);
     const duplicated = briefs.some((picked) => isBriefHighlySimilar(brief, picked));
@@ -1096,7 +1269,7 @@ export const getGadgetBriefs = async (): Promise<GadgetBriefData> => {
   }
 
   if (briefs.length < 3) {
-    for (const item of candidatePool) {
+    for (const item of orderedPool) {
       if (briefs.length >= 3) break;
       const brief = await getOrBuildBrief(item);
       if (!briefs.some((picked) => isBriefHighlySimilar(brief, picked))) {
@@ -1106,7 +1279,7 @@ export const getGadgetBriefs = async (): Promise<GadgetBriefData> => {
   }
 
   if (briefs.length < 3) {
-    for (const item of candidatePool) {
+    for (const item of orderedPool) {
       if (briefs.length >= 3) break;
       const brief = await getOrBuildBrief(item);
       if (!briefs.some((picked) => picked.title === brief.title && picked.source === brief.source)) {
@@ -1118,6 +1291,14 @@ export const getGadgetBriefs = async (): Promise<GadgetBriefData> => {
   while (briefs.length < 3) {
     briefs.push(toFallbackBrief(briefs.length));
   }
+
+  const now = Date.now();
+  const latestEntries = briefs
+    .filter((brief) => !!brief.url)
+    .map((brief) => normalizeTitleSignature(brief.title))
+    .filter(Boolean)
+    .map((signature) => ({ signature, ts: now }));
+  await saveBriefHistory([...historyEntries, ...latestEntries]);
 
   return { briefs };
 };

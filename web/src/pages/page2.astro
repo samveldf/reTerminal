@@ -24,7 +24,7 @@ const now = dayjs();
                 <span class="brief-source">{brief.source || 'Google News'}</span>
                 <span class="brief-time">{brief.pubDate ? dayjs(brief.pubDate).format('MM-DD HH:mm') : '--'}</span>
               </div>
-              <h2 class="brief-title">{brief.title}</h2>
+              <h2 class="brief-title" data-brief-title>{brief.title}</h2>
               <p class="brief-summary" data-brief-summary>{brief.summary}</p>
             </article>
           ))
@@ -36,40 +36,75 @@ const now = dayjs();
   </main>
 
   <script is:inline>
-    const fitBriefSummaries = () => {
-      const summaries = document.querySelectorAll('[data-brief-summary]');
-      summaries.forEach((summary) => {
-        const min = 13;
-        const max = 30;
-        let low = min;
-        let high = max;
-        let best = min;
+    const fitBriefCards = () => {
+      const cards = document.querySelectorAll('.brief-card');
+      cards.forEach((card) => {
+        const title = card.querySelector('[data-brief-title]');
+        const summary = card.querySelector('[data-brief-summary]');
+        if (!title || !summary) return;
 
-        const apply = (size) => {
-          summary.style.fontSize = `${size}px`;
-          summary.style.lineHeight = `${Math.round(size * 1.16)}px`;
+        const fitTitle = () => {
+          const min = 15;
+          const max = 24;
+          let low = min;
+          let high = max;
+          let best = min;
+
+          const apply = (size) => {
+            const lineHeight = Math.round(size * 1.08);
+            title.style.fontSize = `${size}px`;
+            title.style.lineHeight = `${lineHeight}px`;
+            title.style.maxHeight = `${lineHeight * 2}px`;
+          };
+
+          while (low <= high) {
+            const mid = Math.floor((low + high) / 2);
+            apply(mid);
+            if (title.scrollHeight <= title.clientHeight + 1) {
+              best = mid;
+              low = mid + 1;
+            } else {
+              high = mid - 1;
+            }
+          }
+          apply(best);
         };
 
-        while (low <= high) {
-          const mid = Math.floor((low + high) / 2);
-          apply(mid);
-          if (summary.scrollHeight <= summary.clientHeight) {
-            best = mid;
-            low = mid + 1;
-          } else {
-            high = mid - 1;
-          }
-        }
+        const fitSummary = () => {
+          const min = 14;
+          const max = 30;
+          let low = min;
+          let high = max;
+          let best = min;
 
-        apply(best);
+          const apply = (size) => {
+            summary.style.fontSize = `${size}px`;
+            summary.style.lineHeight = `${Math.round(size * 1.15)}px`;
+          };
+
+          while (low <= high) {
+            const mid = Math.floor((low + high) / 2);
+            apply(mid);
+            if (summary.scrollHeight <= summary.clientHeight + 1) {
+              best = mid;
+              low = mid + 1;
+            } else {
+              high = mid - 1;
+            }
+          }
+          apply(best);
+        };
+
+        fitTitle();
+        fitSummary();
       });
     };
 
-    window.addEventListener('load', fitBriefSummaries);
+    window.addEventListener('load', fitBriefCards);
     if (document.fonts?.ready) {
-      document.fonts.ready.then(() => setTimeout(fitBriefSummaries, 50));
+      document.fonts.ready.then(() => setTimeout(fitBriefCards, 50));
     }
-    setTimeout(fitBriefSummaries, 120);
+    setTimeout(fitBriefCards, 120);
   </script>
 </BaseLayout>
 
@@ -129,12 +164,12 @@ const now = dayjs();
   }
 
   .brief-meta {
-    height: 13px;
+    height: 14px;
     display: grid;
     grid-template-columns: 24px 1fr auto;
     align-items: center;
     column-gap: 4px;
-    line-height: 13px;
+    line-height: 14px;
   }
 
   .brief-index {
@@ -160,16 +195,15 @@ const now = dayjs();
 
   .brief-title {
     margin: 0;
-    font-size: 20px;
+    font-size: 19px;
     line-height: 21px;
     color: var(--line);
     font-weight: 800;
     white-space: normal;
     overflow: hidden;
     text-overflow: clip;
-    display: -webkit-box;
-    -webkit-line-clamp: 1;
-    -webkit-box-orient: vertical;
+    display: block;
+    word-break: break-word;
   }
 
   .brief-summary {

@@ -33,6 +33,15 @@ jobs:
           cd web
           npm ci
 
+      - name: Restore Brief History Cache
+        id: restore-brief-history
+        uses: actions/cache/restore@v4
+        with:
+          path: web/.cache/gadget-brief-history.json
+          key: brief-history-${{ github.run_id }}
+          restore-keys: |
+            brief-history-
+
       - name: Build site
         run: |
           cd web
@@ -54,6 +63,8 @@ jobs:
           DEVICE_BATTERY_PERCENT: ${{ vars.DEVICE_BATTERY_PERCENT }}
           PAGE_ROTATE_SECONDS: ${{ vars.PAGE_ROTATE_SECONDS }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GADGET_BRIEF_HISTORY_FILE: .cache/gadget-brief-history.json
+          GADGET_BRIEF_HISTORY_HOURS: ${{ vars.GADGET_BRIEF_HISTORY_HOURS }}
 
       - name: Cache Playwright
         uses: actions/cache@v4
@@ -115,6 +126,13 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: web/dist
+
+      - name: Save Brief History Cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: web/.cache/gadget-brief-history.json
+          key: brief-history-${{ github.run_id }}
 
   deploy:
     needs: build

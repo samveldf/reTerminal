@@ -4,11 +4,18 @@ import { XMLParser } from 'fast-xml-parser';
 import { Readability } from '@mozilla/readability';
 import { JSDOM } from 'jsdom';
 import { GoogleDecoder } from 'google-news-url-decoder';
-import {
-  DEFAULT_GADGET_NEWS_RSS,
-  DEFAULT_GENERAL_NEWS_RSS,
-  fetchNews,
-} from '../apis/news';
+import { DEFAULT_GADGET_NEWS_FEEDS, DEFAULT_GENERAL_NEWS_FEEDS, fetchNews } from '../apis/news';
+
+export type NewsTopic =
+  | 'general'
+  | 'world'
+  | 'society'
+  | 'business'
+  | 'science'
+  | 'health'
+  | 'culture'
+  | 'sports'
+  | 'technology';
 
 export interface NewsItem {
   title: string;
@@ -16,6 +23,7 @@ export interface NewsItem {
   pubDate: string;
   source: string;
   description: string;
+  topic?: NewsTopic;
 }
 
 export interface NewsData {
@@ -35,11 +43,12 @@ export interface GadgetBriefData {
 }
 
 const GOOGLE_NEWS_HOST = 'news.google.com';
-const GADGET_BRIEF_MIN = 160;
-const GADGET_BRIEF_MAX = 195;
+const GADGET_BRIEF_MIN = 185;
+const GADGET_BRIEF_MAX = 215;
 const BRIEF_HISTORY_MAX_ENTRIES = 240;
 const DEFAULT_BRIEF_HISTORY_HOURS = 12;
-const BRIEF_HISTORY_FILE = import.meta.env.GADGET_BRIEF_HISTORY_FILE || '.cache/gadget-brief-history.json';
+const BRIEF_HISTORY_FILE =
+  import.meta.env.GADGET_BRIEF_HISTORY_FILE || '.cache/gadget-brief-history.json';
 const decoder = new GoogleDecoder();
 const MEDIA_PREFIX_PATTERN =
   '(?:新浪(?:科技|数码)?|网易(?:科技|新闻)?|腾讯(?:科技|新闻)?|凤凰(?:网科技|新闻)?|搜狐(?:科技|新闻)?|快科技|IT之家|观察者网|澎湃新闻|封面新闻|第一财经|财联社|新华社|人民日报|中新经纬|界面新闻|C114通信网|爱范儿|36氪)';
@@ -52,15 +61,19 @@ interface BriefHistoryEntry {
 }
 
 const stripBrokenChars = (input: string): string => {
-  return input
-    .replace(/[�□]/g, '')
-    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '');
+  return input.replace(/[�□]/g, '').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '');
 };
 
 const stripScriptLikeFragments = (input: string): string => {
   return input
-    .replace(/!\[[^\]]*\]\((?:https?:\/\/|www\.|mailto:|\b(?:javascript|vbscript|data)\s*:)[^)]*\)/gi, '')
-    .replace(/\[([^\]]{1,80})\]\((?:https?:\/\/|www\.|mailto:|\b(?:javascript|vbscript|data)\s*:)[^)]*\)/gi, '$1')
+    .replace(
+      /!\[[^\]]*\]\((?:https?:\/\/|www\.|mailto:|\b(?:javascript|vbscript|data)\s*:)[^)]*\)/gi,
+      ''
+    )
+    .replace(
+      /\[([^\]]{1,80})\]\((?:https?:\/\/|www\.|mailto:|\b(?:javascript|vbscript|data)\s*:)[^)]*\)/gi,
+      '$1'
+    )
     .replace(/\[\]\((?:https?:\/\/|www\.|mailto:|\b(?:javascript|vbscript|data)\s*:)[^)]*\)/gi, '')
     .replace(/\((?:\s*\b(?:javascript|vbscript|data)\s*:)[^)]*\)/gi, '')
     .replace(/\b(?:javascript|vbscript|data)\s*:[^\s）)\]]+/gi, '')
@@ -93,10 +106,7 @@ const stripLeadingTitleNoise = (summary: string, title: string): string => {
     .map((ch) => escapeRegExp(ch))
     .join('[\\s，。,:：;；\\-—|｜_]*');
 
-  let text = summary.replace(
-    new RegExp(`^(?:${loosePattern})[\\s，。,:：;；\\-—|｜_]*`, 'i'),
-    '',
-  );
+  let text = summary.replace(new RegExp(`^(?:${loosePattern})[\\s，。,:：;；\\-—|｜_]*`, 'i'), '');
 
   const normalizedTitle = normalizeLooseComparable(titleCompact).replace(/\d+/g, '');
   if (normalizedTitle.length >= 8) {
@@ -122,10 +132,11 @@ const stripTitleEchoSentence = (summary: string, title: string): string => {
   const firstNormalized = normalizeLooseComparable(first).replace(/\d+/g, '');
   const firstSimilarity = jaccard(
     buildSimilarityTokensFromText(firstNormalized),
-    buildSimilarityTokensFromText(normalizedTitle),
+    buildSimilarityTokensFromText(normalizedTitle)
   );
   const titleHead = normalizedTitle.slice(0, Math.min(14, normalizedTitle.length));
-  const isEcho = firstSimilarity >= 0.38 || (titleHead.length >= 8 && firstNormalized.includes(titleHead));
+  const isEcho =
+    firstSimilarity >= 0.38 || (titleHead.length >= 8 && firstNormalized.includes(titleHead));
   if (!isEcho) return summary;
 
   const compactRest = sentences.slice(1).join('');
@@ -134,10 +145,7 @@ const stripTitleEchoSentence = (summary: string, title: string): string => {
 };
 
 const stripSourceNoise = (summary: string, source: string): string => {
-  const sourceCompact = cleanSource(source)
-    .replace(/\s+/g, '')
-    .replace(/[|｜]/g, '')
-    .trim();
+  const sourceCompact = cleanSource(source).replace(/\s+/g, '').replace(/[|｜]/g, '').trim();
   if (sourceCompact.length < 2) return summary;
 
   const sourcePattern = escapeRegExp(sourceCompact);
@@ -145,7 +153,7 @@ const stripSourceNoise = (summary: string, source: string): string => {
     .replace(new RegExp(sourcePattern, 'gi'), '')
     .replace(
       new RegExp(`(?:${sourcePattern}[，,。:：;；\\-—|｜\\s]*){2,}`, 'gi'),
-      `${sourceCompact}，`,
+      `${sourceCompact}，`
     )
     .replace(new RegExp(`^${sourcePattern}[，,。:：;；\\-—|｜\\s]*`, 'i'), '');
 };
@@ -155,14 +163,14 @@ const stripEditorialNoise = (summary: string): string => {
 
   const bylineNamePrefix = new RegExp(
     `^(?:[${CHINESE_SURNAME_CHARS}][\\u4e00-\\u9fff]{1,2}(?:[·・][\\u4e00-\\u9fff]{1,3})?[，,、|｜\\s]*){1,3}(?=(?:近年|近年来|近日|表示|称|指出|认为|在|就|对|从|随着|目前|今年|最新))`,
-    'i',
+    'i'
   );
   const leadPatterns = [
     /^(?:作者|编辑|责编|记者|撰文|编译|审校|校对)\s*[：:，,\- ]*\s*[\u4e00-\u9fffA-Za-z0-9·]{1,18}\s*/i,
     /^(?:来源|出处|转自|本文来源|稿源)\s*[：:，,\- ]*\s*[A-Za-z0-9\u4e00-\u9fff·]{1,30}\s*/i,
     new RegExp(
       `^(?:(?:${MEDIA_PREFIX_PATTERN})(?:科技|数码|新闻|财经|网)?[，,:：\\-\\s]*){1,4}(?:讯|消息|报道)?[，,:：\\-\\s]*`,
-      'i',
+      'i'
     ),
     /^(?:20\d{2}[年./-]\d{1,2}[月./-]\d{1,2}(?:日)?|\d{1,2}月\d{1,2}日)(?:上午|下午|晚间|凌晨|中午)?(?:消息|报道|电)?[，,:：\-\s]*/i,
     /^(?:作者|编辑|责编|记者|来源|出处)[，,:：\-\s]*/i,
@@ -178,16 +186,16 @@ const stripEditorialNoise = (summary: string): string => {
       .replace(
         new RegExp(
           `(?:据)?${MEDIA_PREFIX_PATTERN}(?:科技|数码|新闻|财经|网)?[，,、\\s]*(?:消息|报道|讯|称|指出)?`,
-          'gi',
+          'gi'
         ),
-        '',
+        ''
       )
       .replace(
         new RegExp(
           `(?:${MEDIA_PREFIX_PATTERN}(?:科技|数码|新闻|财经|网)?\\s*)?\\d{1,2}月\\d{1,2}日(?:\\d{1,2}:\\d{2})?(?:上午|下午|晚间|凌晨|中午)?(?:消息|报道|讯)?`,
-          'gi',
+          'gi'
         ),
-        '',
+        ''
       )
       .replace(/(?:作者|编辑|责编|记者)\s*[：:，,\- ]*\s*[\u4e00-\u9fffA-Za-z0-9·]{1,18}/g, '')
       .replace(/(?:图源|图片来源|资料图|原标题|本文转自)\s*[：:，,\- ]*[^，。；;]{1,40}/g, '')
@@ -209,7 +217,7 @@ const dedupeRepeatedSentences = (summary: string): string => {
     const norm = normalizeLooseComparable(sentence).replace(/\d+/g, '');
     if (!norm) continue;
     const duplicated = normalizedSeen.some(
-      (seen) => seen === norm || seen.includes(norm) || norm.includes(seen),
+      (seen) => seen === norm || seen.includes(norm) || norm.includes(seen)
     );
     if (!duplicated) {
       kept.push(sentence);
@@ -233,7 +241,7 @@ const finalizeSummaryEnding = (summary: string): string => {
     text.lastIndexOf('!'),
     text.lastIndexOf('?'),
     text.lastIndexOf('；'),
-    text.lastIndexOf(';'),
+    text.lastIndexOf(';')
   );
   if (lastTerminal >= Math.floor(text.length * 0.55)) {
     return text.slice(0, lastTerminal + 1).trim();
@@ -244,7 +252,12 @@ const finalizeSummaryEnding = (summary: string): string => {
     text = text.slice(0, lastComma).trim();
   }
 
-  text = text.replace(/(?:以及|并且|而且|但是|因此|所以|其中|同时|并|且|和|与|及|的|了|在|对|将|就|从)$/u, '').trim();
+  text = text
+    .replace(
+      /(?:以及|并且|而且|但是|因此|所以|其中|同时|并|且|和|与|及|的|了|在|对|将|就|从)$/u,
+      ''
+    )
+    .trim();
   if (!text) return '';
   return /[。！？!?；;]$/.test(text) ? text : `${text}。`;
 };
@@ -252,9 +265,12 @@ const finalizeSummaryEnding = (summary: string): string => {
 const cleanupBriefNoise = (summary: string, title: string, source: string): string => {
   const cleaned = stripTitleEchoSentence(
     dedupeRepeatedSentences(
-      stripLeadingTitleNoise(stripEditorialNoise(stripSourceNoise(stripTimestampNoise(summary), source)), title),
+      stripLeadingTitleNoise(
+        stripEditorialNoise(stripSourceNoise(stripTimestampNoise(summary), source)),
+        title
+      )
     ),
-    title,
+    title
   )
     .replace(/([\u4e00-\u9fffA-Za-z0-9]{3,16})\1{1,}/g, '$1')
     .replace(/([A-Za-z0-9\u4e00-\u9fff]{2,20})(?:-\1){1,}/g, '$1')
@@ -277,7 +293,8 @@ const isLikelyCorruptedText = (input: string): boolean => {
   if (visible.length < 32) return false;
 
   const allowed = (
-    visible.match(/[\u4e00-\u9fffA-Za-z0-9，。！？；：、（）《》“”‘’【】—,.!?;:()[\]<>/%+\-]/g) || []
+    visible.match(/[\u4e00-\u9fffA-Za-z0-9，。！？；：、（）《》“”‘’【】—,.!?;:()[\]<>/%+\-]/g) ||
+    []
   ).length;
 
   return allowed / visible.length < 0.78;
@@ -325,7 +342,9 @@ const decodeEntities = (input: string): string => {
 };
 
 const stripHtml = (input: string): string => {
-  return decodeEntities(input.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
+  return decodeEntities(input.replace(/<[^>]+>/g, ' '))
+    .replace(/\s+/g, ' ')
+    .trim();
 };
 
 const sanitizeLink = (link: string): string => {
@@ -396,7 +415,7 @@ const isEditorialSentence = (sentence: string): boolean => {
   if (
     new RegExp(
       `^(?:据)?${MEDIA_PREFIX_PATTERN}(?:科技|数码|新闻|财经|网)?[，,、\\s]*(?:消息|报道|讯|称|指出)?`,
-      'i',
+      'i'
     ).test(text)
   ) {
     return true;
@@ -408,7 +427,7 @@ const enforceTextLength = (
   text: string,
   sourceText: string,
   minChars: number,
-  maxChars: number,
+  maxChars: number
 ): string => {
   let current = normalizeSummaryText(text);
   const compactSource = normalizeSummaryText(sourceText);
@@ -420,7 +439,7 @@ const enforceTextLength = (
       current.lastIndexOf('！'),
       current.lastIndexOf('？'),
       current.lastIndexOf(';'),
-      current.lastIndexOf('；'),
+      current.lastIndexOf('；')
     );
     if (cutAt >= minChars - 1) {
       current = current.slice(0, cutAt + 1);
@@ -436,7 +455,8 @@ const enforceTextLength = (
       const currentNorm = normalizeLooseComparable(current).replace(/\d+/g, '');
       const sentenceNorm = normalizeLooseComparable(sentence).replace(/\d+/g, '');
       if (!sentenceNorm || sentenceNorm.length < 8) continue;
-      if (currentNorm.includes(sentenceNorm) || sentenceNorm.includes(currentNorm.slice(-24))) continue;
+      if (currentNorm.includes(sentenceNorm) || sentenceNorm.includes(currentNorm.slice(-24)))
+        continue;
 
       current = normalizeSummaryText(`${current}${sentence}`);
     }
@@ -511,25 +531,44 @@ const scoreGeneralHeadline = (item: NewsItem): number => {
   const text = `${item.title} ${item.description}`.toLowerCase();
   const positive = [
     '突发',
-    '最新',
-    '要闻',
-    '发布',
-    '政策',
+    '调查',
+    '深度',
+    '现场',
+    '全球',
     '经济',
     '金融',
     '国际',
+    '社会',
+    '教育',
+    '医疗',
+    '气候',
+    '科学',
+    '文化',
+    '体育',
     'ai',
     '科技',
-    '芯片',
     '能源',
     '安全',
     '市场',
   ];
-  const negative = ['折扣', '优惠', '抽奖', '福利', '促销', '团购'];
+  const negative = [
+    '折扣',
+    '优惠',
+    '抽奖',
+    '福利',
+    '促销',
+    '团购',
+    '学习贯彻',
+    '工作会议',
+    '调研指导',
+    '发表讲话',
+    '荣誉称号',
+    '先进事迹',
+  ];
 
   let score = 0;
   for (const kw of positive) {
-    if (text.includes(kw)) score += 1.6;
+    if (text.includes(kw)) score += 1.4;
   }
   for (const kw of negative) {
     if (text.includes(kw)) score -= 2;
@@ -544,6 +583,69 @@ const scoreGeneralHeadline = (item: NewsItem): number => {
   }
 
   return score;
+};
+
+const GENERAL_TOPIC_KEYWORDS: Array<{ topic: NewsTopic; words: string[] }> = [
+  {
+    topic: 'world',
+    words: [
+      '国际',
+      '全球',
+      '美国',
+      '欧洲',
+      '日本',
+      '韩国',
+      '俄罗斯',
+      '乌克兰',
+      '中东',
+      '联合国',
+      '外交',
+    ],
+  },
+  {
+    topic: 'business',
+    words: ['经济', '金融', '市场', '股市', '央行', '企业', '消费', '贸易', '关税', '房价', '就业'],
+  },
+  {
+    topic: 'science',
+    words: ['科学', '研究', '太空', '航天', '宇宙', '量子', '考古', '物种', '气候', '天文'],
+  },
+  {
+    topic: 'health',
+    words: ['健康', '医疗', '医院', '疾病', '药物', '疫苗', '医生', '公共卫生', '心理'],
+  },
+  {
+    topic: 'culture',
+    words: ['文化', '电影', '音乐', '艺术', '展览', '文学', '博物馆', '娱乐', '票房', '演出'],
+  },
+  {
+    topic: 'sports',
+    words: ['体育', '比赛', '联赛', '世界杯', '奥运', '足球', '篮球', '网球', '冠军', '运动员'],
+  },
+  {
+    topic: 'technology',
+    words: ['科技', '人工智能', 'ai', '芯片', '机器人', '互联网', '卫星', '数码', '新能源车'],
+  },
+  {
+    topic: 'society',
+    words: ['社会', '教育', '学校', '城市', '交通', '司法', '法院', '民生', '事故', '社区'],
+  },
+];
+
+const classifyGeneralTopic = (item: NewsItem, hint: NewsTopic = 'general'): NewsTopic => {
+  const text = `${item.title} ${item.description}`.toLowerCase();
+  let bestTopic = hint;
+  let bestHits = 0;
+
+  for (const group of GENERAL_TOPIC_KEYWORDS) {
+    const hits = group.words.reduce((count, word) => count + (text.includes(word) ? 1 : 0), 0);
+    if (hits > bestHits) {
+      bestHits = hits;
+      bestTopic = group.topic;
+    }
+  }
+
+  return bestTopic;
 };
 
 const fallbackGeneralItems = (): NewsItem[] => [
@@ -584,30 +686,6 @@ const fallbackGeneralItems = (): NewsItem[] => [
   },
   {
     title: '当前页面仅显示重点 headlines',
-    url: '',
-    pubDate: '',
-    source: '',
-    description: '',
-  },
-];
-
-const fallbackGadgetItems = (): NewsItem[] => [
-  {
-    title: '暂无可用数码新闻，请检查网络连接',
-    url: '',
-    pubDate: '',
-    source: '',
-    description: '',
-  },
-  {
-    title: '请确认 Gadget RSS 地址可访问',
-    url: '',
-    pubDate: '',
-    source: '',
-    description: '',
-  },
-  {
-    title: '系统会在下次刷新时自动重试',
     url: '',
     pubDate: '',
     source: '',
@@ -712,9 +790,9 @@ const saveBriefHistory = async (entries: BriefHistoryEntry[]): Promise<void> => 
           entries: pruned,
         },
         null,
-        2,
+        2
       ),
-      'utf-8',
+      'utf-8'
     );
   } catch (error) {
     console.error('brief history save error:', error);
@@ -761,6 +839,41 @@ const DEVICE_PATTERNS = [
   /(?:小米|红米|华为|荣耀|魅族|一加|真我|联想|苹果|三星|OPPO|vivo|iQOO|realme)[A-Za-z0-9]{1,12}(?:Ultra|Pro|Max|Plus|Mini|Fold|Flip|SE)?/gi,
   /\biqoo[\s-]*15[\s-]*ultra\b/gi,
 ];
+
+type GadgetTopic =
+  | 'mobile'
+  | 'computing'
+  | 'imaging'
+  | 'wearable'
+  | 'smart-home'
+  | 'gaming'
+  | 'audio'
+  | 'mobility'
+  | 'ai-hardware'
+  | 'other';
+
+const classifyGadgetTopic = (item: NewsItem): GadgetTopic => {
+  const text = `${item.title} ${item.description}`.toLowerCase();
+  const groups: Array<{ topic: GadgetTopic; words: string[] }> = [
+    { topic: 'imaging', words: ['相机', '镜头', '摄影', '影像', '无人机', 'gopro', 'insta360'] },
+    { topic: 'wearable', words: ['手表', '手环', '眼镜', '可穿戴', 'watch', 'vision pro'] },
+    { topic: 'smart-home', words: ['智能家居', '扫地机', '门锁', '电视', '投影', '音箱', '家电'] },
+    {
+      topic: 'gaming',
+      words: ['游戏', '主机', '掌机', '显卡', '电竞', 'playstation', 'xbox', 'switch'],
+    },
+    { topic: 'audio', words: ['耳机', '音响', '音频', '降噪', '扬声器', '声学'] },
+    { topic: 'mobility', words: ['汽车', '电动车', '座舱', '辅助驾驶', '充电', '出行'] },
+    {
+      topic: 'computing',
+      words: ['电脑', '笔记本', '处理器', '芯片', 'macbook', 'windows', '显示器'],
+    },
+    { topic: 'mobile', words: ['手机', 'iphone', 'android', '安卓', '折叠屏', '鸿蒙'] },
+    { topic: 'ai-hardware', words: ['机器人', 'ai硬件', '端侧ai', '大模型', '智能硬件'] },
+  ];
+
+  return groups.find((group) => group.words.some((word) => text.includes(word)))?.topic || 'other';
+};
 
 const extractDeviceKeysFromText = (text: string): Set<string> => {
   const keys = new Set<string>();
@@ -821,7 +934,10 @@ const dedupeNewsItems = (items: NewsItem[]): NewsItem[] => {
       if (existing.signature === signature) return true;
 
       const minLen = Math.min(existing.signature.length, signature.length);
-      if (minLen >= 10 && (existing.signature.includes(signature) || signature.includes(existing.signature))) {
+      if (
+        minLen >= 10 &&
+        (existing.signature.includes(signature) || signature.includes(existing.signature))
+      ) {
         return true;
       }
 
@@ -840,7 +956,7 @@ const isHighlySimilar = (
   candidateTokens: Set<string>,
   selectedTokens: Set<string>,
   candidateDeviceKeys: Set<string>,
-  selectedDeviceKeys: Set<string>,
+  selectedDeviceKeys: Set<string>
 ): boolean => {
   for (const key of candidateDeviceKeys) {
     if (selectedDeviceKeys.has(key)) return true;
@@ -866,15 +982,17 @@ const selectDiverseGadgetItems = (rankedItems: NewsItem[], count: number): NewsI
   const selected: NewsItem[] = [];
   const tokenMap = new Map<NewsItem, Set<string>>();
   const deviceMap = new Map<NewsItem, Set<string>>();
+  const sourceCounts = new Map<string, number>();
+  const selectedTopics = new Set<GadgetTopic>();
 
   for (const item of rankedItems) {
     tokenMap.set(item, buildSimilarityTokens(item));
     deviceMap.set(item, extractDeviceKeys(item));
   }
 
-  for (const candidate of rankedItems) {
-    if (selected.length >= count) break;
-
+  const trySelect = (candidate: NewsItem, requireNewTopic: boolean): boolean => {
+    const topic = classifyGadgetTopic(candidate);
+    if (requireNewTopic && selectedTopics.has(topic)) return false;
     const candidateTokens = tokenMap.get(candidate) || new Set<string>();
     const candidateDeviceKeys = deviceMap.get(candidate) || new Set<string>();
     const hasNearDuplicate = selected.some((picked) =>
@@ -884,20 +1002,103 @@ const selectDiverseGadgetItems = (rankedItems: NewsItem[], count: number): NewsI
         candidateTokens,
         tokenMap.get(picked) || new Set<string>(),
         candidateDeviceKeys,
-        deviceMap.get(picked) || new Set<string>(),
-      ),
+        deviceMap.get(picked) || new Set<string>()
+      )
     );
 
-    if (!hasNearDuplicate) {
+    const sourceKey = normalizeComparable(candidate.source || 'unknown');
+    const sourceCount = sourceCounts.get(sourceKey) || 0;
+    if (!hasNearDuplicate && sourceCount < 2) {
       selected.push(candidate);
+      sourceCounts.set(sourceKey, sourceCount + 1);
+      selectedTopics.add(topic);
+      return true;
     }
+    return false;
+  };
+
+  for (const candidate of rankedItems) {
+    if (selected.length >= count) break;
+    trySelect(candidate, true);
   }
 
   if (selected.length < count) {
     for (const item of rankedItems) {
       if (selected.length >= count) break;
-      if (!selected.includes(item)) selected.push(item);
+      if (selected.includes(item)) continue;
+      trySelect(item, false);
     }
+  }
+
+  return selected.slice(0, count);
+};
+
+const OFFICIAL_SOURCE_PATTERN =
+  /新华社|人民日报|央视|中国新闻网|中新网|中国日报|光明网|央广网|中国网|参考消息/;
+
+const isGeneralHeadlineSimilar = (candidate: NewsItem, selected: NewsItem): boolean => {
+  const candidateTitle = normalizeTitleSignature(candidate.title);
+  const selectedTitle = normalizeTitleSignature(selected.title);
+  const minLength = Math.min(candidateTitle.length, selectedTitle.length);
+
+  if (
+    minLength >= 10 &&
+    (candidateTitle.includes(selectedTitle) || selectedTitle.includes(candidateTitle))
+  ) {
+    return true;
+  }
+
+  return jaccard(keywordTokens(candidate.title), keywordTokens(selected.title)) >= 0.48;
+};
+
+const selectDiverseGeneralItems = (rankedItems: NewsItem[], count: number): NewsItem[] => {
+  const selected: NewsItem[] = [];
+  const sourceCounts = new Map<string, number>();
+  let officialCount = 0;
+
+  const canSelect = (candidate: NewsItem, maxPerSource: number, maxOfficial: number): boolean => {
+    const sourceKey = normalizeComparable(candidate.source || 'unknown');
+    if ((sourceCounts.get(sourceKey) || 0) >= maxPerSource) return false;
+    if (OFFICIAL_SOURCE_PATTERN.test(candidate.source) && officialCount >= maxOfficial)
+      return false;
+    return !selected.some((picked) => isGeneralHeadlineSimilar(candidate, picked));
+  };
+
+  const add = (candidate: NewsItem): void => {
+    selected.push(candidate);
+    const sourceKey = normalizeComparable(candidate.source || 'unknown');
+    sourceCounts.set(sourceKey, (sourceCounts.get(sourceKey) || 0) + 1);
+    if (OFFICIAL_SOURCE_PATTERN.test(candidate.source)) officialCount += 1;
+  };
+
+  const topicOrder: NewsTopic[] = [
+    'world',
+    'society',
+    'business',
+    'science',
+    'health',
+    'culture',
+    'sports',
+    'technology',
+    'general',
+  ];
+
+  for (const topic of topicOrder) {
+    if (selected.length >= count) break;
+    const candidate = rankedItems.find(
+      (item) => item.topic === topic && !selected.includes(item) && canSelect(item, 1, 1)
+    );
+    if (candidate) add(candidate);
+  }
+
+  for (const candidate of rankedItems) {
+    if (selected.length >= count) break;
+    if (!selected.includes(candidate) && canSelect(candidate, 1, 2)) add(candidate);
+  }
+
+  for (const candidate of rankedItems) {
+    if (selected.length >= count) break;
+    if (!selected.includes(candidate) && canSelect(candidate, 2, 2)) add(candidate);
   }
 
   return selected.slice(0, count);
@@ -925,16 +1126,19 @@ const isBriefHighlySimilar = (candidate: GadgetBrief, selected: GadgetBrief): bo
 
   const titleSimilarity = jaccard(
     buildSimilarityTokensFromText(candidate.title),
-    buildSimilarityTokensFromText(selected.title),
+    buildSimilarityTokensFromText(selected.title)
   );
   if (titleSimilarity >= 0.26) return true;
 
-  const titleKeywordSimilarity = jaccard(keywordTokens(candidate.title), keywordTokens(selected.title));
+  const titleKeywordSimilarity = jaccard(
+    keywordTokens(candidate.title),
+    keywordTokens(selected.title)
+  );
   if (titleKeywordSimilarity >= 0.55) return true;
 
   const bodySimilarity = jaccard(
     buildSimilarityTokensFromText(candidateText),
-    buildSimilarityTokensFromText(selectedText),
+    buildSimilarityTokensFromText(selectedText)
   );
   return bodySimilarity >= 0.3;
 };
@@ -963,19 +1167,46 @@ const parseNewsItems = async (feedUrl: string, fallback: NewsItem[]): Promise<Ne
         pubDate?: string;
         description?: string;
         source?: { '#text'?: string } | string;
-      }) => toNewsItem(item),
+      }) => toNewsItem(item)
     )
     .filter((item) => !!item.title && !item.title.includes('N/A'));
 
   return dedupeNewsItems(items);
 };
 
-const resolveGeneralRssUrl = (): string => {
-  return import.meta.env.GENERAL_NEWS_RSS_URL || DEFAULT_GENERAL_NEWS_RSS;
+const resolveGeneralRssFeeds = (): Array<{ topic: NewsTopic; url: string }> => {
+  const configured = (import.meta.env.GENERAL_NEWS_RSS_URL || '')
+    .split(/[\n,]/)
+    .map((url: string) => url.trim())
+    .filter(Boolean)
+    .map((url: string) => ({ topic: 'general' as NewsTopic, url }));
+
+  const defaults = DEFAULT_GENERAL_NEWS_FEEDS.map((feed) => ({
+    topic: feed.topic as NewsTopic,
+    url: feed.url,
+  }));
+  const merged = configured.length ? [...configured, ...defaults.slice(1)] : defaults;
+  const seen = new Set<string>();
+  return merged.filter((feed) => {
+    if (seen.has(feed.url)) return false;
+    seen.add(feed.url);
+    return true;
+  });
 };
 
-const resolveGadgetRssUrl = (): string => {
-  return import.meta.env.GADGET_NEWS_RSS_URL || import.meta.env.GOOGLE_NEWS_RSS_URL || DEFAULT_GADGET_NEWS_RSS;
+const resolveGadgetRssUrls = (): string[] => {
+  const configured = (
+    import.meta.env.GADGET_NEWS_RSS_URL ||
+    import.meta.env.GOOGLE_NEWS_RSS_URL ||
+    ''
+  )
+    .split(/[\n,]/)
+    .map((url: string) => url.trim())
+    .filter(Boolean);
+  const feeds = configured.length
+    ? [...configured, ...DEFAULT_GADGET_NEWS_FEEDS]
+    : [...DEFAULT_GADGET_NEWS_FEEDS];
+  return [...new Set(feeds)];
 };
 
 const tryDecodeGoogleNewsLink = async (url: string): Promise<string> => {
@@ -1031,9 +1262,7 @@ const extractViaJinaProxy = async (url: string): Promise<string> => {
 };
 
 const keywordSetFromTitle = (title: string): string[] => {
-  const words = title
-    .toLowerCase()
-    .match(/[a-z0-9]{2,}|[\u4e00-\u9fff]{2,}/g);
+  const words = title.toLowerCase().match(/[a-z0-9]{2,}|[\u4e00-\u9fff]{2,}/g);
   if (!words) return [];
   return Array.from(new Set(words)).slice(0, 12);
 };
@@ -1042,7 +1271,7 @@ const extractiveSummary = (
   title: string,
   body: string,
   minChars: number,
-  maxChars: number,
+  maxChars: number
 ): string => {
   const normalizedBody = normalizeSummaryText(body);
   const sentences = sentenceSplit(normalizedBody);
@@ -1055,7 +1284,7 @@ const extractiveSummary = (
   const scored = sentences.map((sentence, index) => {
     const keywordHits = keywords.reduce(
       (sum, keyword) => (sentence.includes(keyword) ? sum + 1 : sum),
-      0,
+      0
     );
     const len = countChars(sentence);
     const lengthScore = len >= 16 && len <= 48 ? 1.4 : len <= 70 ? 1 : 0.2;
@@ -1085,7 +1314,7 @@ const summarizeWithGemini = async (
   title: string,
   source: string,
   minChars: number,
-  maxChars: number,
+  maxChars: number
 ): Promise<string> => {
   const apiKey = import.meta.env.GEMINI_API_KEY;
   if (!apiKey) return '';
@@ -1120,7 +1349,7 @@ const summarizeWithGemini = async (
             maxOutputTokens: 260,
           },
         }),
-      },
+      }
     );
 
     if (!response.ok) return '';
@@ -1185,7 +1414,8 @@ const toFallbackBrief = (index: number): GadgetBrief => {
     source: 'Google News',
     pubDate: '',
     url: '',
-    summary: '当前未拉取到足够的数码资讯，系统将在下次刷新时自动重试。请检查 RSS 地址和网络连接状态。',
+    summary:
+      '当前未拉取到足够的数码资讯，系统将在下次刷新时自动重试。请检查 RSS 地址和网络连接状态。',
   };
 };
 
@@ -1195,7 +1425,8 @@ const buildGadgetBrief = async (item: NewsItem, allItems: NewsItem[]): Promise<G
   const paddingSource = stripLeadingTitleNoise(normalizeSummaryText(body), item.title);
 
   const aiSummary = await summarizeWithGemini(item.title, body, GADGET_BRIEF_MIN, GADGET_BRIEF_MAX);
-  let summary = aiSummary || extractiveSummary(item.title, body, GADGET_BRIEF_MIN, GADGET_BRIEF_MAX);
+  let summary =
+    aiSummary || extractiveSummary(item.title, body, GADGET_BRIEF_MIN, GADGET_BRIEF_MAX);
   summary = cleanupBriefNoise(summary, item.title, item.source || '');
   summary = enforceTextLength(summary, paddingSource, GADGET_BRIEF_MIN, GADGET_BRIEF_MAX);
   summary = cleanupBriefNoise(summary, item.title, item.source || '');
@@ -1203,7 +1434,12 @@ const buildGadgetBrief = async (item: NewsItem, allItems: NewsItem[]): Promise<G
   summary = cleanupBriefNoise(summary, item.title, item.source || '');
 
   if (isLikelyCorruptedText(summary)) {
-    summary = extractiveSummary(item.title, buildFallbackBriefBody(item, allItems), GADGET_BRIEF_MIN, GADGET_BRIEF_MAX);
+    summary = extractiveSummary(
+      item.title,
+      buildFallbackBriefBody(item, allItems),
+      GADGET_BRIEF_MIN,
+      GADGET_BRIEF_MAX
+    );
     summary = cleanupBriefNoise(summary, item.title, item.source || '');
     summary = enforceTextLength(summary, paddingSource, GADGET_BRIEF_MIN, GADGET_BRIEF_MAX);
     summary = cleanupBriefNoise(summary, item.title, item.source || '');
@@ -1219,8 +1455,20 @@ const buildGadgetBrief = async (item: NewsItem, allItems: NewsItem[]): Promise<G
 };
 
 export const getGoogleHeadlines = async (): Promise<NewsData> => {
-  const items = await parseNewsItems(resolveGeneralRssUrl(), fallbackGeneralItems());
-  const headlines = items.slice(0, 8);
+  const feeds = resolveGeneralRssFeeds();
+  const feedItems = await Promise.all(
+    feeds.map(async (feed) => {
+      const items = await parseNewsItems(feed.url, []);
+      return items.map((item) => ({
+        ...item,
+        topic: classifyGeneralTopic(item, feed.topic),
+      }));
+    })
+  );
+  const ranked = dedupeNewsItems(feedItems.flat()).sort(
+    (a, b) => scoreGeneralHeadline(b) - scoreGeneralHeadline(a)
+  );
+  const headlines = selectDiverseGeneralItems(ranked, 8);
 
   if (!headlines.length) {
     return { headlines: fallbackGeneralItems() };
@@ -1230,7 +1478,8 @@ export const getGoogleHeadlines = async (): Promise<NewsData> => {
 };
 
 export const getGadgetBriefs = async (): Promise<GadgetBriefData> => {
-  const items = await parseNewsItems(resolveGadgetRssUrl(), fallbackGadgetItems());
+  const feedItems = await Promise.all(resolveGadgetRssUrls().map((url) => parseNewsItems(url, [])));
+  const items = dedupeNewsItems(feedItems.flat());
   const ranked = [...items].sort((a, b) => scoreGadgetHeadline(b) - scoreGadgetHeadline(a));
 
   if (!ranked.length) {
@@ -1239,9 +1488,14 @@ export const getGadgetBriefs = async (): Promise<GadgetBriefData> => {
 
   const historyEntries = await loadBriefHistory();
   const recentSignatures = new Set(historyEntries.map((entry) => entry.signature));
-  const isRecentItem = (item: NewsItem): boolean => recentSignatures.has(normalizeTitleSignature(item.title));
+  const isRecentItem = (item: NewsItem): boolean => {
+    const signature = normalizeTitleSignature(item.title);
+    if (recentSignatures.has(signature)) return true;
+    const tokens = keywordTokens(signature);
+    return [...recentSignatures].some((recent) => jaccard(tokens, keywordTokens(recent)) >= 0.56);
+  };
 
-  const candidatePool = ranked.slice(0, 10);
+  const candidatePool = ranked.slice(0, 18);
   const freshPool = candidatePool.filter((item) => !isRecentItem(item));
   const repeatedPool = candidatePool.filter((item) => isRecentItem(item));
   const orderedPool = [...freshPool, ...repeatedPool];
@@ -1258,7 +1512,7 @@ export const getGadgetBriefs = async (): Promise<GadgetBriefData> => {
   };
 
   const briefs: GadgetBrief[] = [];
-  const preSelected = selectDiverseGadgetItems(orderedPool, Math.min(8, orderedPool.length));
+  const preSelected = selectDiverseGadgetItems(orderedPool, Math.min(12, orderedPool.length));
   for (const item of preSelected) {
     const brief = await getOrBuildBrief(item);
     const duplicated = briefs.some((picked) => isBriefHighlySimilar(brief, picked));
@@ -1273,16 +1527,6 @@ export const getGadgetBriefs = async (): Promise<GadgetBriefData> => {
       if (briefs.length >= 3) break;
       const brief = await getOrBuildBrief(item);
       if (!briefs.some((picked) => isBriefHighlySimilar(brief, picked))) {
-        briefs.push(brief);
-      }
-    }
-  }
-
-  if (briefs.length < 3) {
-    for (const item of orderedPool) {
-      if (briefs.length >= 3) break;
-      const brief = await getOrBuildBrief(item);
-      if (!briefs.some((picked) => picked.title === brief.title && picked.source === brief.source)) {
         briefs.push(brief);
       }
     }

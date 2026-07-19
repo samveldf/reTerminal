@@ -5,27 +5,47 @@ import { getGadgetBriefs } from '../services/newsService';
 
 const { briefs } = await getGadgetBriefs();
 const now = dayjs();
+const briefLabels = ['SIGNAL', 'FIELD NOTE', 'DEEP READ'];
 ---
 
 <BaseLayout>
   <main class="epaper-screen page2-screen">
-    <header class="cyber-header">
-      <div class="header-title">PAGE 2 // KEY GADGET BRIEFS</div>
-      <div class="header-time">{`UPDATED ${now.format('MM-DD HH:mm')}`}</div>
+    <header class="cyber-header page-header">
+      <div class="page-marker">02</div>
+      <div class="header-copy">
+        <div class="header-kicker">CURATED / DEDUPED / ~200 CHARS</div>
+        <div class="header-title">GADGET INTELLIGENCE</div>
+      </div>
+      <div class="header-status">
+        <span>BRIEF UPDATED</span>
+        <strong>{now.format('MM-DD HH:mm')}</strong>
+      </div>
     </header>
 
     <section class="panel briefs-panel">
       <div class="brief-list">
         {
           briefs.map((brief, idx) => (
-            <article class="brief-card">
-              <div class="brief-meta">
-                <span class="brief-index">{`#${idx + 1}`}</span>
-                <span class="brief-source">{brief.source || 'Google News'}</span>
-                <span class="brief-time">{brief.pubDate ? dayjs(brief.pubDate).format('MM-DD HH:mm') : '--'}</span>
+            <article class={`brief-card brief-${idx + 1}`}>
+              <div class="brief-index">
+                <strong>{String(idx + 1).padStart(2, '0')}</strong>
+                <span>{briefLabels[idx]}</span>
               </div>
-              <h2 class="brief-title" data-brief-title>{brief.title}</h2>
-              <p class="brief-summary" data-brief-summary>{brief.summary}</p>
+              <div class="brief-content">
+                <div class="brief-meta">
+                  <span class="brief-source">{brief.source || 'Google News'}</span>
+                  <span class="meta-rule" />
+                  <time class="brief-time">
+                    {brief.pubDate ? dayjs(brief.pubDate).format('MM-DD HH:mm') : 'LIVE'}
+                  </time>
+                </div>
+                <h2 class="brief-title" data-brief-title>
+                  {brief.title}
+                </h2>
+                <p class="brief-summary" data-brief-summary>
+                  {brief.summary}
+                </p>
+              </div>
             </article>
           ))
         }
@@ -37,30 +57,27 @@ const now = dayjs();
 
   <script is:inline>
     const fitBriefCards = () => {
-      const cards = document.querySelectorAll('.brief-card');
-      cards.forEach((card) => {
+      document.querySelectorAll('.brief-card').forEach((card) => {
         const title = card.querySelector('[data-brief-title]');
         const summary = card.querySelector('[data-brief-summary]');
         if (!title || !summary) return;
 
-        const fitTitle = () => {
-          const min = 15;
-          const max = 24;
+        const fit = (element, min, max, lineRatio, maxLines = 0) => {
           let low = min;
           let high = max;
           let best = min;
 
           const apply = (size) => {
-            const lineHeight = Math.round(size * 1.08);
-            title.style.fontSize = `${size}px`;
-            title.style.lineHeight = `${lineHeight}px`;
-            title.style.maxHeight = `${lineHeight * 2}px`;
+            const lineHeight = Math.round(size * lineRatio);
+            element.style.fontSize = `${size}px`;
+            element.style.lineHeight = `${lineHeight}px`;
+            if (maxLines) element.style.maxHeight = `${lineHeight * maxLines}px`;
           };
 
           while (low <= high) {
             const mid = Math.floor((low + high) / 2);
             apply(mid);
-            if (title.scrollHeight <= title.clientHeight + 1) {
+            if (element.scrollHeight <= element.clientHeight + 1) {
               best = mid;
               low = mid + 1;
             } else {
@@ -70,63 +87,83 @@ const now = dayjs();
           apply(best);
         };
 
-        const fitSummary = () => {
-          const min = 14;
-          const max = 30;
-          let low = min;
-          let high = max;
-          let best = min;
-
-          const apply = (size) => {
-            summary.style.fontSize = `${size}px`;
-            summary.style.lineHeight = `${Math.round(size * 1.15)}px`;
-          };
-
-          while (low <= high) {
-            const mid = Math.floor((low + high) / 2);
-            apply(mid);
-            if (summary.scrollHeight <= summary.clientHeight + 1) {
-              best = mid;
-              low = mid + 1;
-            } else {
-              high = mid - 1;
-            }
-          }
-          apply(best);
-        };
-
-        fitTitle();
-        fitSummary();
+        fit(title, 16, 22, 1.08, 2);
+        fit(summary, 15, 23, 1.14);
       });
     };
 
     window.addEventListener('load', fitBriefCards);
-    if (document.fonts?.ready) {
-      document.fonts.ready.then(() => setTimeout(fitBriefCards, 50));
-    }
+    if (document.fonts?.ready) document.fonts.ready.then(() => setTimeout(fitBriefCards, 40));
     setTimeout(fitBriefCards, 120);
   </script>
 </BaseLayout>
 
 <style>
   .page2-screen {
-    padding: 5px;
+    padding: 6px;
+    gap: 6px;
     position: relative;
-    gap: 5px;
   }
 
-  .page2-screen .cyber-header {
-    height: 44px;
-    padding: 4px 9px;
+  .page-header {
+    height: 49px;
+    flex: 0 0 49px;
+    padding: 4px 7px;
+    gap: 8px;
   }
 
-  .page2-screen .header-title {
+  .page-marker {
+    width: 38px;
+    height: 35px;
+    background: var(--line);
+    color: #ffffff;
+    display: grid;
+    place-items: center;
     font-size: 22px;
-    line-height: 24px;
-    letter-spacing: 0.5px;
+    line-height: 22px;
+    font-weight: 900;
   }
 
-  .page2-screen .header-time {
+  .header-copy {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .header-kicker {
+    color: var(--accent);
+    font-size: 9px;
+    line-height: 10px;
+    font-weight: 900;
+    letter-spacing: 1.3px;
+  }
+
+  .header-title {
+    color: var(--line);
+    font-size: 24px;
+    line-height: 25px;
+    letter-spacing: 0.4px;
+    white-space: nowrap;
+  }
+
+  .header-status {
+    min-width: 134px;
+    border-left: 4px solid var(--orange);
+    padding-left: 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+  }
+
+  .header-status span {
+    color: var(--accent);
+    font-size: 9px;
+    line-height: 11px;
+    font-weight: 900;
+    letter-spacing: 0.8px;
+  }
+
+  .header-status strong {
+    color: var(--text);
     font-size: 16px;
     line-height: 18px;
   }
@@ -135,88 +172,125 @@ const now = dayjs();
     flex: 1;
     min-height: 0;
     border-color: var(--warn);
-    padding: 4px;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
+    padding: 5px;
   }
 
   .brief-list {
-    flex: 1;
-    min-height: 0;
+    height: 100%;
     display: grid;
-    grid-template-rows: repeat(3, 1fr);
-    gap: 1px;
+    grid-template-rows: repeat(3, minmax(0, 1fr));
+    gap: 4px;
   }
 
   .brief-card {
+    min-height: 0;
     border: 1px solid var(--line);
-    padding: 3px 5px;
+    border-left: 6px solid var(--line);
     background: #ffffff;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .brief-card:nth-child(2) {
-    border-color: var(--warn);
-  }
-
-  .brief-meta {
-    height: 14px;
     display: grid;
-    grid-template-columns: 24px 1fr auto;
-    align-items: center;
-    column-gap: 4px;
-    line-height: 14px;
+    grid-template-columns: 47px minmax(0, 1fr);
+    overflow: hidden;
+  }
+
+  .brief-2 {
+    border-color: var(--warn);
+    border-left-color: var(--orange);
+  }
+
+  .brief-3 {
+    border-left-color: var(--accent);
   }
 
   .brief-index {
+    border-right: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    color: var(--line);
+  }
+
+  .brief-2 .brief-index {
+    border-right-color: var(--warn);
+    color: var(--warn);
+  }
+
+  .brief-3 .brief-index {
     color: var(--accent);
-    font-size: 10px;
-    font-weight: 800;
+  }
+
+  .brief-index strong {
+    font-size: 20px;
+    line-height: 21px;
+  }
+
+  .brief-index span {
+    max-width: 43px;
+    font-size: 7px;
+    line-height: 8px;
+    font-weight: 900;
+    letter-spacing: 0.3px;
+    text-align: center;
+  }
+
+  .brief-content {
+    min-width: 0;
+    min-height: 0;
+    padding: 4px 6px 5px;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .brief-meta {
+    height: 13px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 6px;
   }
 
   .brief-source {
     color: var(--accent);
-    font-size: 10px;
-    font-weight: 700;
+    font-size: 9px;
+    line-height: 11px;
+    font-weight: 900;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+  }
+
+  .meta-rule {
+    height: 1px;
+    background: var(--line);
   }
 
   .brief-time {
     color: var(--muted);
-    font-size: 10px;
-    font-weight: 700;
+    font-size: 9px;
+    line-height: 11px;
+    font-weight: 800;
   }
 
   .brief-title {
     margin: 0;
+    color: var(--line);
     font-size: 19px;
     line-height: 21px;
-    color: var(--line);
-    font-weight: 800;
-    white-space: normal;
+    font-weight: 900;
     overflow: hidden;
-    text-overflow: clip;
-    display: block;
     word-break: break-word;
   }
 
   .brief-summary {
-    margin: 0;
-    font-size: 18px;
-    line-height: 21px;
-    color: var(--text);
-    font-weight: 700;
     flex: 1;
     min-height: 0;
+    margin: 0;
+    color: var(--text);
+    font-size: 17px;
+    line-height: 19px;
+    font-weight: 700;
     overflow: hidden;
     word-break: break-word;
-    white-space: normal;
     text-rendering: geometricPrecision;
   }
 
@@ -224,12 +298,12 @@ const now = dayjs();
     position: absolute;
     right: 8px;
     bottom: 6px;
-    color: var(--muted);
-    font-size: 15px;
-    font-weight: 700;
-    background: rgba(255, 255, 255, 0.86);
+    color: var(--line);
+    font-size: 11px;
+    line-height: 16px;
+    font-weight: 900;
+    background: #ffffff;
     border: 1px solid var(--line);
-    padding: 1px 6px;
-    line-height: 18px;
+    padding: 1px 5px;
   }
 </style>

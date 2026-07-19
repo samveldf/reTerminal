@@ -1,103 +1,112 @@
 ---
 import dayjs from 'dayjs';
 import BaseLayout from '../layouts/BaseLayout.astro';
-import { getGoogleHeadlines } from '../services/newsService';
+import { getGoogleHeadlines, type NewsTopic } from '../services/newsService';
 import { getWeather } from '../services/weatherService';
 
 const weather = await getWeather();
 const news = await getGoogleHeadlines();
 const now = dayjs();
+const topicLabels: Record<NewsTopic, string> = {
+  general: 'TOP',
+  world: 'WORLD',
+  society: 'LIFE',
+  business: 'BIZ',
+  science: 'SCI',
+  health: 'HEALTH',
+  culture: 'CULTURE',
+  sports: 'SPORT',
+  technology: 'TECH',
+};
 ---
 
 <BaseLayout>
   <main class="epaper-screen page1-screen">
-    <header class="cyber-header">
-      <div class="header-title">PAGE 1 // WEATHER + TOP NEWS</div>
-      <div class="header-time">{`TOKYO ${now.format('MM-DD HH:mm')}`}</div>
+    <header class="cyber-header page-header">
+      <div class="page-marker">01</div>
+      <div class="header-copy">
+        <div class="header-kicker">DAILY SIGNAL / TOKYO</div>
+        <div class="header-title">WEATHER + TOP STORIES</div>
+      </div>
+      <div class="header-status">
+        <span>LIVE BRIEF</span>
+        <strong>{now.format('MM-DD HH:mm')}</strong>
+      </div>
     </header>
 
-    <div class="split-layout">
-      <section class="panel weather-panel">
-        <div class="section-head">TODAY + NEXT 3 DAYS</div>
-        <div class="weather-track">
-          {
-            weather.days.map((day) => {
-              const toSolarPercent = (timeText: string, fallback: number): number => {
-                const matched = timeText.match(/^(\d{2}):(\d{2})$/);
-                if (!matched) return fallback;
-                const totalMinutes = Number(matched[1]) * 60 + Number(matched[2]);
-                const normalized = ((totalMinutes - 240) / 900) * 100;
-                return Math.max(8, Math.min(96, Math.round(normalized)));
-              };
+    <section class="panel weather-panel">
+      <div class="section-bar">
+        <span class="section-title">4-DAY FORECAST</span>
+        <span class="section-meta">{weather.cityLabel.toUpperCase()} / JST</span>
+      </div>
+      <div class="weather-track">
+        {
+          weather.days.map((day, idx) => (
+            <article class={`day-card tone-${idx + 1}`}>
+              <div class="day-head">
+                <span>{day.label}</span>
+                <time>{day.date}</time>
+              </div>
+              <div class="condition-row">
+                <span class="weather-icon" aria-hidden="true">
+                  {day.icon}
+                </span>
+                <strong>{day.symbol}</strong>
+              </div>
+              <div class="day-desc">{day.description}</div>
+              <div class="weather-metrics">
+                <div class="temp-pair">
+                  <strong>{day.maxTemp}°</strong>
+                  <span>/ {day.minTemp}°</span>
+                </div>
+                <span class="humidity">H {day.humidity}%</span>
+              </div>
+              <div class="solar-window">
+                <div class="solar-item sunrise">
+                  <span class="solar-icon">↑</span>
+                  <span class="solar-copy">
+                    <>
+                      <small>SUNRISE</small>
+                      <strong>{day.sunrise}</strong>
+                    </>
+                  </span>
+                </div>
+                <div class="solar-item sunset">
+                  <span class="solar-icon">↓</span>
+                  <span class="solar-copy">
+                    <>
+                      <small>SUNSET</small>
+                      <strong>{day.sunset}</strong>
+                    </>
+                  </span>
+                </div>
+              </div>
+            </article>
+          ))
+        }
+      </div>
+    </section>
 
-              const sunriseLevel = toSolarPercent(day.sunrise, 34);
-              const sunsetLevel = toSolarPercent(day.sunset, 76);
-
-              return (
-                <article class="day-card">
-                  <div class="day-head">
-                    <span>{day.label}</span>
-                    <span>{day.date}</span>
-                  </div>
-                  <div class="day-main">
-                    <span class="icon-emoji">{day.icon}</span>
-                    <span class="icon-symbol">{day.symbol}</span>
-                  </div>
-                  <div class="day-desc">{day.description}</div>
-                  <div class="day-temps">{`${day.maxTemp}° / ${day.minTemp}°`}</div>
-                  <div class="day-extra">{`HUM ${day.humidity}%`}</div>
-
-                  <div class="day-hud">
-                    <div class="hud-label-row">
-                      <span>SOLAR WINDOW</span>
-                      <span class="hud-glyph">{day.date}</span>
-                    </div>
-                    <div class="sun-grid">
-                      <div class="sun-block">
-                        <div class="sun-row">
-                          <span class="sun-icon-badge rise-badge">☀</span>
-                          <span class="sun-label">SUNRISE</span>
-                          <span class="sun-time">{day.sunrise}</span>
-                        </div>
-                        <div class="sun-track">
-                          <span class="sun-progress rise-progress" style={`width:${sunriseLevel}%`}></span>
-                        </div>
-                      </div>
-                      <div class="sun-block">
-                        <div class="sun-row">
-                          <span class="sun-icon-badge set-badge">☾</span>
-                          <span class="sun-label">SUNSET</span>
-                          <span class="sun-time">{day.sunset}</span>
-                        </div>
-                        <div class="sun-track">
-                          <span class="sun-progress set-progress" style={`width:${sunsetLevel}%`}></span>
-                        </div>
-                      </div>
-                    </div>
-                    <div class="hud-scan">
-                      <span>◢</span>
-                      <span>◉</span>
-                      <span>◣</span>
-                    </div>
-                  </div>
-                </article>
-              );
-            })
-          }
-        </div>
-      </section>
-
-      <section class="panel news-panel">
-        <div class="section-head">TOP HEADLINES</div>
-        <div class="headline-list">
-          {
-            news.headlines.slice(0, 6).map((item, idx) => (
-              <div class="headline-item">{`${idx + 1}. ${item.title}`}</div>
-            ))
-          }
-        </div>
-      </section>
-    </div>
+    <section class="panel news-panel">
+      <div class="section-bar news-section-bar">
+        <span class="section-title">EDITOR'S RADAR</span>
+        <span class="section-meta">MULTI-SOURCE / MULTI-TOPIC</span>
+      </div>
+      <div class="headline-list">
+        {
+          news.headlines.slice(0, 6).map((item, idx) => (
+            <article class="headline-item">
+              <span class="headline-index">{String(idx + 1).padStart(2, '0')}</span>
+              <span class={`topic-chip topic-${item.topic || 'general'}`}>
+                {topicLabels[item.topic || 'general']}
+              </span>
+              <h2>{item.title}</h2>
+              <span class="headline-source">{item.source || 'Google News'}</span>
+            </article>
+          ))
+        }
+      </div>
+    </section>
 
     <div class="corner-note">1 / 3</div>
   </main>
@@ -105,285 +114,362 @@ const now = dayjs();
 
 <style>
   .page1-screen {
-    gap: 6px;
     padding: 6px;
+    gap: 6px;
     position: relative;
   }
 
-  .split-layout {
+  .page-header {
+    height: 49px;
+    flex: 0 0 49px;
+    padding: 4px 7px;
+    gap: 8px;
+  }
+
+  .page-marker {
+    width: 38px;
+    height: 35px;
+    background: var(--line);
+    color: #ffffff;
+    display: grid;
+    place-items: center;
+    font-size: 22px;
+    line-height: 22px;
+    font-weight: 900;
+  }
+
+  .header-copy {
     flex: 1;
-    min-height: 0;
+    min-width: 0;
+  }
+
+  .header-kicker {
+    color: var(--accent);
+    font-size: 9px;
+    line-height: 10px;
+    font-weight: 900;
+    letter-spacing: 1.5px;
+  }
+
+  .header-title {
+    color: var(--line);
+    font-size: 24px;
+    line-height: 25px;
+    letter-spacing: 0.4px;
+    white-space: nowrap;
+  }
+
+  .header-status {
+    min-width: 126px;
+    border-left: 4px solid var(--orange);
+    padding-left: 8px;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    align-items: flex-end;
+  }
+
+  .header-status span {
+    color: var(--accent);
+    font-size: 9px;
+    line-height: 11px;
+    font-weight: 900;
+    letter-spacing: 1px;
+  }
+
+  .header-status strong {
+    color: var(--text);
+    font-size: 16px;
+    line-height: 18px;
   }
 
   .weather-panel {
-    flex: 10;
-    min-height: 0;
-    border-color: var(--line);
-    padding: 6px;
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
+    height: 207px;
+    flex: 0 0 207px;
+    padding: 5px 6px 6px;
   }
 
   .news-panel {
-    flex: 10;
+    flex: 1;
     min-height: 0;
+    padding: 5px 6px 6px;
     border-color: var(--warn);
-    padding: 6px;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
   }
 
-  .section-head {
-    height: 20px;
+  .section-bar {
+    height: 21px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 2px solid var(--line);
+    margin-bottom: 5px;
+  }
+
+  .section-title {
     color: var(--accent);
-    font-size: 14px;
+    font-size: 13px;
+    line-height: 18px;
+    font-weight: 900;
+    letter-spacing: 0.8px;
+  }
+
+  .section-meta {
+    color: var(--muted);
+    font-size: 9px;
+    line-height: 12px;
     font-weight: 800;
-    line-height: 20px;
-    letter-spacing: 0.6px;
+    letter-spacing: 0.5px;
+  }
+
+  .news-section-bar {
+    border-bottom-color: var(--warn);
   }
 
   .weather-track {
-    flex: 1;
-    min-height: 0;
+    height: 167px;
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    grid-template-rows: 1fr;
     gap: 5px;
-    overflow: hidden;
   }
 
   .day-card {
+    min-width: 0;
     border: 1px solid var(--line);
-    padding: 7px 8px;
-    overflow: hidden;
-    position: relative;
-    background:
-      linear-gradient(180deg, rgba(0, 0, 255, 0.06), rgba(255, 255, 255, 0) 52%),
-      #ffffff;
+    border-top-width: 4px;
+    padding: 5px 7px 6px;
+    background: #ffffff;
     display: flex;
     flex-direction: column;
-    justify-content: flex-start;
-    gap: 3px;
+    overflow: hidden;
+  }
+
+  .tone-2 {
+    border-top-color: var(--orange);
+  }
+
+  .tone-3 {
+    border-top-color: var(--accent);
+  }
+
+  .tone-4 {
+    border-top-color: var(--warn);
   }
 
   .day-head {
     display: flex;
     justify-content: space-between;
     color: var(--accent);
-    font-size: 14px;
-    font-weight: 700;
-    margin-bottom: 0;
-    line-height: 16px;
+    font-size: 13px;
+    line-height: 15px;
+    font-weight: 900;
   }
 
-  .day-main {
+  .day-head time {
+    color: var(--muted);
+  }
+
+  .condition-row {
+    height: 29px;
     display: flex;
     align-items: center;
     gap: 5px;
-    line-height: 21px;
+    color: var(--line);
   }
 
-  .icon-emoji {
-    color: var(--line);
+  .weather-icon {
+    width: 25px;
+    font-size: 22px;
+    line-height: 24px;
+    text-align: center;
+  }
+
+  .condition-row strong {
     font-size: 20px;
-    line-height: 20px;
-  }
-
-  .icon-symbol {
-    color: var(--line);
-    font-size: 20px;
-    font-weight: 800;
-    line-height: 21px;
-  }
-
-  .day-desc {
-    font-size: 13px;
-    line-height: 14px;
-    color: var(--text);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    min-height: 14px;
-  }
-
-  .day-temps {
-    color: var(--line);
-    font-size: 16px;
-    line-height: 17px;
-    font-weight: 800;
-  }
-
-  .day-extra {
-    color: var(--muted);
-    font-size: 13px;
-    line-height: 14px;
-    font-weight: 700;
-  }
-
-  .day-hud {
-    margin-top: auto;
-    border: 1px dashed rgba(0, 0, 255, 0.78);
-    padding: 4px 5px 4px;
-    background:
-      linear-gradient(180deg, rgba(0, 255, 0, 0.06), rgba(0, 255, 0, 0.01)),
-      repeating-linear-gradient(0deg, rgba(0, 0, 255, 0.06) 0 1px, transparent 1px 4px);
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    min-height: 72px;
-  }
-
-  .hud-label-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    color: var(--accent);
-    font-size: 10px;
-    line-height: 11px;
-    font-weight: 800;
-    letter-spacing: 0.4px;
-  }
-
-  .hud-glyph {
-    color: var(--line);
-    font-size: 10px;
-    line-height: 11px;
-    font-weight: 700;
-  }
-
-  .hud-scan {
-    margin-top: auto;
-    border-top: 1px solid rgba(0, 0, 255, 0.35);
-    color: var(--muted);
-    font-size: 9px;
-    line-height: 10px;
-    font-weight: 700;
-    display: flex;
-    justify-content: space-between;
-    letter-spacing: 0.4px;
-  }
-
-  .sun-grid {
-    display: grid;
-    grid-template-rows: repeat(2, minmax(0, 1fr));
-    row-gap: 3px;
-    margin-top: 0;
-  }
-
-  .sun-block {
-    display: grid;
-    grid-template-rows: auto auto;
-    row-gap: 1px;
-  }
-
-  .sun-row {
-    display: grid;
-    grid-template-columns: 14px 1fr auto;
-    align-items: center;
-    column-gap: 4px;
-    min-height: 13px;
-  }
-
-  .sun-icon-badge {
-    width: 13px;
-    height: 13px;
-    border: 1px solid rgba(0, 0, 255, 0.78);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 50%;
-    font-size: 9px;
-    line-height: 9px;
-    font-weight: 800;
-  }
-
-  .rise-badge {
-    color: #d00000;
-    background: rgba(255, 255, 0, 0.24);
-  }
-
-  .set-badge {
-    color: #0000ff;
-    background: rgba(180, 180, 255, 0.28);
-  }
-
-  .sun-label {
-    color: var(--line);
-    font-size: 10px;
-    line-height: 11px;
-    font-weight: 800;
+    line-height: 22px;
     letter-spacing: 0.2px;
   }
 
-  .sun-time {
+  .day-desc {
     color: var(--text);
-    font-size: 12px;
-    line-height: 12px;
+    font-size: 11px;
+    line-height: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .weather-metrics {
+    height: 25px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--line);
+    margin-top: 1px;
+  }
+
+  .temp-pair strong {
+    color: var(--line);
+    font-size: 20px;
+    line-height: 22px;
+  }
+
+  .temp-pair span {
+    color: var(--text);
+    font-size: 14px;
     font-weight: 800;
   }
 
-  .sun-track {
-    height: 5px;
-    border: 1px solid rgba(0, 0, 255, 0.62);
-    background: rgba(255, 255, 255, 0.86);
-    position: relative;
-    overflow: hidden;
+  .humidity {
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 900;
   }
 
-  .sun-progress {
-    display: block;
-    height: 100%;
+  .solar-window {
+    margin-top: auto;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px;
   }
 
-  .rise-progress {
-    background:
-      linear-gradient(90deg, rgba(255, 128, 0, 0.82), rgba(255, 192, 0, 0.42)),
-      repeating-linear-gradient(90deg, rgba(255, 128, 0, 0.7) 0 2px, rgba(255, 128, 0, 0.2) 2px 4px);
+  .solar-item {
+    height: 32px;
+    display: grid;
+    grid-template-columns: 22px 1fr;
+    align-items: center;
+    border: 1px solid var(--orange);
+    padding: 2px 3px;
   }
 
-  .set-progress {
-    background:
-      linear-gradient(90deg, rgba(0, 0, 255, 0.84), rgba(0, 180, 255, 0.38)),
-      repeating-linear-gradient(90deg, rgba(0, 0, 255, 0.7) 0 2px, rgba(0, 0, 255, 0.22) 2px 4px);
+  .solar-item.sunset {
+    border-color: var(--line);
+  }
+
+  .solar-icon {
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--orange);
+    border-radius: 50%;
+    color: var(--warn);
+    display: grid;
+    place-items: center;
+    font-size: 13px;
+    line-height: 13px;
+    font-weight: 900;
+  }
+
+  .sunset .solar-icon {
+    border-color: var(--line);
+    color: var(--line);
+  }
+
+  .solar-copy {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .solar-copy small {
+    color: var(--muted);
+    font-size: 7px;
+    line-height: 8px;
+    font-weight: 900;
+    letter-spacing: 0.2px;
+  }
+
+  .solar-copy strong {
+    color: var(--text);
+    font-size: 11px;
+    line-height: 12px;
   }
 
   .headline-list {
-    flex: 1;
-    min-height: 0;
+    height: 154px;
     display: grid;
     grid-template-rows: repeat(6, 1fr);
     gap: 1px;
   }
 
   .headline-item {
-    border-left: 3px solid var(--line);
-    padding-left: 7px;
-    font-size: 15px;
-    line-height: 19px;
-    color: var(--text);
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-    font-weight: 700;
-    display: flex;
+    min-height: 0;
+    display: grid;
+    grid-template-columns: 25px 47px minmax(0, 1fr) 82px;
     align-items: center;
+    column-gap: 5px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .headline-item:last-child {
+    border-bottom: 0;
+  }
+
+  .headline-index {
+    height: 18px;
+    background: var(--line);
+    color: #ffffff;
+    display: grid;
+    place-items: center;
+    font-size: 10px;
+    line-height: 10px;
+    font-weight: 900;
+  }
+
+  .topic-chip {
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    padding: 1px 2px;
+    font-size: 8px;
+    line-height: 11px;
+    font-weight: 900;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .topic-world,
+  .topic-business,
+  .topic-technology {
+    border-color: var(--line);
+    color: var(--line);
+  }
+
+  .topic-culture,
+  .topic-sports {
+    border-color: var(--orange);
+    color: var(--warn);
+  }
+
+  .headline-item h2 {
+    min-width: 0;
+    margin: 0;
+    color: var(--text);
+    font-size: 14px;
+    line-height: 17px;
+    font-weight: 800;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .headline-source {
+    min-width: 0;
+    color: var(--muted);
+    font-size: 9px;
+    line-height: 11px;
+    font-weight: 700;
+    text-align: right;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .corner-note {
     position: absolute;
     right: 8px;
     bottom: 6px;
-    color: var(--muted);
-    font-size: 13px;
-    font-weight: 700;
-    background: rgba(255, 255, 255, 0.86);
+    color: var(--line);
+    font-size: 11px;
+    font-weight: 900;
+    background: #ffffff;
     border: 1px solid var(--line);
-    padding: 1px 6px;
-    line-height: 18px;
+    padding: 1px 5px;
+    line-height: 16px;
   }
 </style>

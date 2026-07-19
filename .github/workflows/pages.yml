@@ -92,16 +92,19 @@ jobs:
           done
           npm run screenshot
 
-      - name: Setup ImageMagick
-        uses: mfinelli/setup-imagemagick@v7
+      - name: Install ImageMagick
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y imagemagick
+          echo "IMAGEMAGICK_CMD=$(command -v magick || command -v convert)" >> "$GITHUB_ENV"
 
       - name: Convert to EPD BMP (3 pages)
         run: |
           cd web
-          magick xc:"#000000" xc:"#FFFFFF" xc:"#FF0000" xc:"#FFFF00" xc:"#0000FF" xc:"#00FF00" xc:"#FF8000" +append palette.png
+          "$IMAGEMAGICK_CMD" xc:"#000000" xc:"#FFFFFF" xc:"#FF0000" xc:"#FFFF00" xc:"#0000FF" xc:"#00FF00" xc:"#FF8000" +append palette.png
 
           for p in page1 page2; do
-            magick ./dist/${p}.png \
+            "$IMAGEMAGICK_CMD" ./dist/${p}.png \
               -colorspace sRGB \
               -strip \
               -alpha off \
@@ -112,7 +115,7 @@ jobs:
               ./dist/${p}.bmp
           done
 
-          magick ./dist/page3.png \
+          "$IMAGEMAGICK_CMD" ./dist/page3.png \
             -colorspace sRGB \
             -strip \
             -alpha off \
